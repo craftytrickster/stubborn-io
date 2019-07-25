@@ -7,9 +7,18 @@ use std::pin::Pin;
 use std::io;
 use tokio::io::{AsyncRead, AsyncWrite};
 use bytes::{Buf, BufMut};
+use std::ops::Deref;
 
 pub struct StubbornTcpStream {
     tcp: TcpStream
+}
+
+impl Deref for StubbornTcpStream {
+    type Target = TcpStream;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tcp
+    }
 }
 
 impl StubbornTcpStream {
@@ -23,54 +32,56 @@ impl StubbornTcpStream {
     }
 }
 
+
+
 // ===== impl Read / Write =====
 
 impl AsyncRead for StubbornTcpStream {
-    unsafe fn prepare_uninitialized_buffer(&self, _: &mut [u8]) -> bool {
-        false
+    unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [u8]) -> bool {
+        self.tcp.prepare_uninitialized_buffer(buf)
     }
 
     fn poll_read(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        self.tcp.poll_read(cx, buf)
+        AsyncRead::poll_read(Pin::new(&mut self.tcp), cx, buf)
     }
 
     fn poll_read_buf<B: BufMut>(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut B,
     ) -> Poll<io::Result<usize>> {
-        self.tcp.poll_read_buf(cx, buf)
+        AsyncRead::poll_read_buf(Pin::new(&mut self.tcp), cx, buf)
     }
 }
 
 impl AsyncWrite for StubbornTcpStream {
     fn poll_write(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        self.tcp.poll_write(cx, buf)
+        AsyncWrite::poll_write(Pin::new(&mut self.tcp), cx, buf)
     }
 
     #[inline]
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         // tcp flush is a no-op
-        self.tcp.poll_flush(cx)
+        AsyncWrite::poll_flush(Pin::new(&mut self.tcp), cx)
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        self.tcp.poll_shutdown(cx)
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        AsyncWrite::poll_shutdown(Pin::new(&mut self.tcp), cx)
     }
 
     fn poll_write_buf<B: Buf>(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut B,
     ) -> Poll<io::Result<usize>> {
-        self.tcp.poll_write_buf(cx, buf)
+        AsyncWrite::poll_write_buf(Pin::new(&mut self.tcp), cx, buf)
     }
 }
