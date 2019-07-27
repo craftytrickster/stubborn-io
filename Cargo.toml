@@ -8,6 +8,6 @@ edition = "2018"
 
 [dependencies]
 tokio = { git = "https://github.com/tokio-rs/tokio", features = ["rt-full"] }
-
+futures-preview = { version = "=0.3.0-alpha.17", features = ["async-await", "nightly"] }
 bytes = "0.4"
 mio = "0.6"
