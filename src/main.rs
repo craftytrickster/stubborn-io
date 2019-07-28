@@ -33,9 +33,12 @@ impl Future for MainLoop {
     
     fn poll(mut self: Pin<& mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         self.rx.poll_recv(cx).map(|item| {
-            Pin::new(&mut self.framed).start_send(item.unwrap());
-            Pin::new(&mut self.framed).poll_flush(cx);
-
+            let pre = Pin::new(&mut self.framed).poll_flush(cx);
+            println!("PRE FLUSH: {:?}", pre);
+            let start_send = Pin::new(&mut self.framed).start_send(item.unwrap());
+            println!("WILL FLUSH");
+            let flush = Pin::new(&mut self.framed).poll_flush(cx);
+            println!("Start: {:?}\nflush: {:?}\n", start_send, flush);
 
             cx.waker().wake_by_ref();
         });
