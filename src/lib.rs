@@ -7,10 +7,10 @@ use std::pin::Pin;
 use std::io;
 use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
 use bytes::{Buf, BufMut};
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, Add};
 use std::future::Future;
-use std::time::Duration;
-use std::iter::Peekable;
+use std::time::{Duration, Instant};
+use tokio::timer::Delay;
 
 
 
@@ -29,7 +29,7 @@ struct ReconnectStatus {
 }
 
 
-fn get_standard_reconnect_strategy() -> Box<Iterator<Item=Duration>> {
+fn get_standard_reconnect_strategy() -> Box<dyn Iterator<Item=Duration>> {
     let initial_attempts = vec![
         Duration::from_secs(5),
         Duration::from_secs(10),
@@ -60,13 +60,16 @@ impl ReconnectOptions {
 }
 
 impl ReconnectStatus {
-    pub fn new(attempt: Pin<Box<dyn Future<Output=io::Result<TcpStream>>>>, options: &ReconnectOptions) -> Self {
+    pub fn new(options: &ReconnectOptions) -> Self {
         ReconnectStatus {
             attempts_tracker: AttemptsTracker {
                 attempt_num: 0,
                 retries_remaining: (options.retries_to_attempt_fn)()
             },
-            reconnect_attempt: attempt
+            reconnect_attempt: Box::pin(futures::future::err(
+                // This is to avoid making the reconnect_attempt an Option<Future>
+                io::Error::new(ErrorKind::NotConnected, "Start in disconnected state")
+            ))
         }
     }
 }
@@ -147,30 +150,34 @@ impl StubbornTcpStream {
     }
     
     fn on_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) {
-        if let Status::Disconnected(_) = self.status {
-            panic!("THIS SHOULD NEVER HAPPEN, ABORT ABORT");
-        }
-        
-        println!("Disconnect occured");
-        self.status = Status::Disconnected(
-            ReconnectStatus::new(Box::pin(TcpStream::connect(&self.addr)), &self.options)
-        );
-        
-        cx.waker().wake_by_ref();
-    }
-
-    fn on_reconnect_fail(mut self: Pin<&mut Self>, cx: &mut Context) {
-        let addr = self.addr;
-        
-        let status = match &mut self.status {
-            Status::Connected => panic!("THIS SHOULD NEVER HAPPEN, ABORT ABORT"),
-            Status::Disconnected(status) => status
+        match &mut self.status {
+            // initial disconnect
+            Status::Connected => {
+                println!("Disconnect occured");
+                self.status = Status::Disconnected(ReconnectStatus::new(&self.options));
+            },
+            Status::Disconnected(_) => {}
         };
-
-        status.reconnect_attempt = Box::pin(TcpStream::connect(&addr));
-        status.attempts_tracker.attempt_num += 1;
         
-        cx.waker().wake_by_ref();
+        let addr = self.addr;
+
+        // this is ensured to be true now
+        if let Status::Disconnected(reconnect_status) = &mut self.status {
+            let next_duration = reconnect_status.attempts_tracker.retries_remaining.next().expect("You idiots!!!");
+
+            let future_instant = Delay::new(Instant::now().add(next_duration));
+            let reconnect_attempt = async move {
+                future_instant.await;
+                TcpStream::connect(&addr).await
+            };
+
+            reconnect_status.reconnect_attempt = Box::pin(reconnect_attempt);
+            reconnect_status.attempts_tracker.attempt_num += 1;
+
+            println!("Will attempt number: {}", reconnect_status.attempts_tracker.attempt_num);
+
+            cx.waker().wake_by_ref();
+        }
     }
     
     fn poll_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) -> bool {
@@ -189,7 +196,7 @@ impl StubbornTcpStream {
                 true
             },
             Poll::Ready(Err(err)) => {
-                self.on_reconnect_fail(cx);
+                self.on_disconnect(cx);
                 false
             },
             Poll::Pending => false

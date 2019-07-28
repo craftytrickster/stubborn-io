@@ -3,7 +3,6 @@
 use stubborn_stream::StubbornTcpStream;
 use tokio;
 use std::net::{SocketAddr, SocketAddrV4};
-use tokio::io::AsyncWrite;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Poll, Context};
@@ -32,7 +31,7 @@ impl Future for MainLoop {
     type Output = ();
     
     fn poll(mut self: Pin<& mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        self.rx.poll_recv(cx).map(|item| {
+        let _ = self.rx.poll_recv(cx).map(|item| {
             let pre = Pin::new(&mut self.framed).poll_flush(cx);
             println!("PRE FLUSH: {:?}", pre);
             let start_send = Pin::new(&mut self.framed).start_send(item.unwrap());
@@ -69,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     thread::spawn(move || {
         loop {
             let mut line = String::new();
-            stdin().read_line(&mut line);
+            let _ = stdin().read_line(&mut line);
             let _ = tx.try_send(line);
         }
     });
