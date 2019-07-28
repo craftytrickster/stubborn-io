@@ -48,6 +48,24 @@ fn is_error_fatal(err: &std::io::Error) -> bool {
 //    }
 //}
 
+// these should be part of the trait, alongside the is error fatal
+// that way it can be specialized for the read 0 case for the tcp one
+fn is_read_disconnect_detected(poll_result: &Poll<std::io::Result<usize>>) -> bool {
+    match poll_result {
+        Poll::Ready(Ok(size)) if *size == 0 => true, // perhaps this is only true in tcp
+        Poll::Ready(Err(err)) => is_error_fatal(err),
+        _ => false
+    }
+}
+
+fn is_write_disconnect_detected<T>(poll_result: &Poll<std::io::Result<T>>) -> bool {
+    match poll_result {
+        Poll::Ready(Err(err)) => is_error_fatal(err),
+        _ => false
+    }
+}
+
+
 impl StubbornTcpStream {
     pub async fn connect(addr: &SocketAddr) -> io::Result<Self> {
         let tcp = TcpStream::connect(addr).await?;
@@ -68,11 +86,9 @@ impl AsyncRead for StubbornTcpStream {
     unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [u8]) -> bool {
         match &self.status {
             Status::Connected(tcp) => {
-                println!("C:prepare_uninitialized_buffer");
                 tcp.prepare_uninitialized_buffer(buf)
             },
             Status::Disconnected => {
-                println!("D:prepare_uninitialized_buffer");
                 false
             }
         }
@@ -85,27 +101,16 @@ impl AsyncRead for StubbornTcpStream {
     ) -> Poll<io::Result<usize>> {
         match &mut self.status {
             Status::Connected(ref mut tcp) => {
-                println!("C:poll_read");
-                let poll_read = AsyncRead::poll_read(Pin::new(tcp), cx, buf);
+                let poll = AsyncRead::poll_read(Pin::new(tcp), cx, buf);
                 
-                match poll_read {
-                    Poll::Ready(Ok(size)) if size == 0 => {
-                        self.on_disconnect();
-                        Poll::Pending
-                    },
-                    Poll::Ready(Err(ref e)) => {
-                        if is_error_fatal(e) {
-                            self.on_disconnect();
-                            Poll::Pending
-                        } else {
-                            poll_read
-                        }
-                    }
-                    _ => poll_read
+                if is_read_disconnect_detected(&poll) {
+                    self.on_disconnect();
+                    Poll::Pending
+                } else {
+                    poll
                 }
             },
             Status::Disconnected => {
-                println!("D:poll_read");
                 Poll::Pending
             }
         }
@@ -118,27 +123,16 @@ impl AsyncRead for StubbornTcpStream {
     ) -> Poll<io::Result<usize>> {
         match &mut self.status {
             Status::Connected(ref mut tcp) => {
-                println!("C:poll_read_buf");
-                let poll_read_buf = AsyncRead::poll_read_buf(Pin::new(tcp), cx, buf);
+                let poll = AsyncRead::poll_read_buf(Pin::new(tcp), cx, buf);
 
-                match poll_read_buf {
-                    Poll::Ready(Ok(size)) if size == 0 => {
-                        self.on_disconnect();
-                        Poll::Pending
-                    }
-                    Poll::Ready(Err(ref e)) => {
-                        if is_error_fatal(e) {
-                            self.on_disconnect();
-                            Poll::Pending
-                        } else {
-                            poll_read_buf
-                        }
-                    }
-                    _ => poll_read_buf
+                if is_read_disconnect_detected(&poll) {
+                    self.on_disconnect();
+                    Poll::Pending
+                } else {
+                    poll
                 }
             },
             Status::Disconnected => {
-                println!("D:poll_read_buf");
                 Poll::Pending
             }
         }
@@ -153,19 +147,16 @@ impl AsyncWrite for StubbornTcpStream {
     ) -> Poll<io::Result<usize>> {
         match &mut self.status {
             Status::Connected(ref mut tcp) => {
-                println!("C:poll_write");
-                let write_result = AsyncWrite::poll_write(Pin::new(tcp), cx, buf);
-                println!("WRR: {:?}", write_result);
-                match write_result {
-                    Poll::Ready(Err(ref e)) if is_error_fatal(e) => {
-                        self.on_disconnect();
-                        Poll::Pending
-                    },
-                    _ => write_result
+                let poll = AsyncWrite::poll_write(Pin::new(tcp), cx, buf);
+                
+                if is_write_disconnect_detected(&poll) {
+                    self.on_disconnect();
+                    Poll::Pending
+                } else {
+                    poll
                 }
             },
             Status::Disconnected => {
-                println!("D:poll_write");
                 Poll::Pending
             }
         }
@@ -174,18 +165,16 @@ impl AsyncWrite for StubbornTcpStream {
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match &mut self.status {
             Status::Connected(ref mut tcp) => {
-                println!("C:poll_flush");
-                let flush = AsyncWrite::poll_flush(Pin::new(tcp), cx);
-                match flush {
-                    Poll::Ready(Err(ref e)) if is_error_fatal(e) => {
-                        self.on_disconnect();
-                        Poll::Pending
-                    },
-                    _ => flush
+                let poll = AsyncWrite::poll_flush(Pin::new(tcp), cx);
+
+                if is_write_disconnect_detected(&poll) {
+                    self.on_disconnect();
+                    Poll::Pending
+                } else {
+                    poll
                 }
             },
             Status::Disconnected => {
-                println!("D:poll_flush");
                 Poll::Pending
             }
         }
@@ -194,18 +183,15 @@ impl AsyncWrite for StubbornTcpStream {
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match &mut self.status {
             Status::Connected(ref mut tcp) => {
-                println!("C:poll_shutdown");
-                match AsyncWrite::poll_shutdown(Pin::new(tcp), cx) {
-                    Poll::Ready(_) => { // if completed, we are disconnected whether error or not
-                        self.on_disconnect();
-                    },
-                    _ => {}
-                };
+                let poll = AsyncWrite::poll_shutdown(Pin::new(tcp), cx);
+                if let Poll::Ready(_) = poll {
+                    // if completed, we are disconnected whether error or not
+                    self.on_disconnect();
+                }
 
-                Poll::Pending
+                poll
             },
             Status::Disconnected => {
-                println!("D:poll_shutdown");
                 Poll::Pending
             }
         }
@@ -218,19 +204,16 @@ impl AsyncWrite for StubbornTcpStream {
     ) -> Poll<io::Result<usize>> {
         match &mut self.status {
             Status::Connected(ref mut tcp) => {
-                println!("C:poll_write_buf");
-                let poll_write_buf = AsyncWrite::poll_write_buf(Pin::new(tcp), cx, buf);
-                
-                match poll_write_buf {
-                    Poll::Ready(Err(ref e)) if is_error_fatal(e) => {
-                        self.on_disconnect();
-                        Poll::Pending
-                    },
-                    _ => poll_write_buf
+                let poll = AsyncWrite::poll_write_buf(Pin::new(tcp), cx, buf);
+
+                if is_write_disconnect_detected(&poll) {
+                    self.on_disconnect();
+                    Poll::Pending
+                } else {
+                    poll
                 }
             },
             Status::Disconnected => {
-                println!("D:poll_write_buf");
                 Poll::Pending
             }
         }
