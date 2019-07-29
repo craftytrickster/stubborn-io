@@ -12,10 +12,9 @@ use std::future::Future;
 use std::time::{Duration, Instant};
 use tokio::timer::Delay;
 
-
-
 struct ReconnectOptions {
-    retries_to_attempt_fn: Box<dyn Fn() -> Box<dyn Iterator<Item=Duration>>>
+    retries_to_attempt_fn: Box<dyn Fn() -> Box<dyn Iterator<Item=Duration>>>,
+    exit_if_first_connect_fails: bool
 }
 
 struct AttemptsTracker {
@@ -31,22 +30,32 @@ struct ReconnectStatus {
 
 fn get_standard_reconnect_strategy() -> Box<dyn Iterator<Item=Duration>> {
     let initial_attempts = vec![
-        Duration::from_secs(5),
-        Duration::from_secs(10),
-        Duration::from_secs(20),
-        Duration::from_secs(30),
-        Duration::from_secs(40),
-        Duration::from_secs(50),
-        Duration::from_secs(60),
-        Duration::from_secs(60 * 2),
-        Duration::from_secs(60 * 5),
-        Duration::from_secs(60 * 10),
-        Duration::from_secs(60 * 20),
+        Duration::from_secs(3),
+        Duration::from_secs(3),
+        Duration::from_secs(3),
     ];
 
-    let repeat = std::iter::repeat(Duration::from_secs(60 * 30));
+//    let initial_attempts = vec![
+//        Duration::from_secs(5),
+//        Duration::from_secs(10),
+//        Duration::from_secs(20),
+//        Duration::from_secs(30),
+//        Duration::from_secs(40),
+//        Duration::from_secs(50),
+//        Duration::from_secs(60),
+//        Duration::from_secs(60 * 2),
+//        Duration::from_secs(60 * 5),
+//        Duration::from_secs(60 * 10),
+//        Duration::from_secs(60 * 20),
+//    ];
+//
+//    let repeat = std::iter::repeat(Duration::from_secs(60 * 30));
+//
+//    let forever_iterator = initial_attempts.into_iter().chain(repeat.into_iter());
 
-    let forever_iterator = initial_attempts.into_iter().chain(repeat.into_iter());
+    
+    
+    let forever_iterator = initial_attempts.into_iter();
     Box::new(forever_iterator)
 }
 
@@ -54,7 +63,8 @@ impl ReconnectOptions {
     pub fn new() -> Self {
         
         ReconnectOptions {
-            retries_to_attempt_fn: Box::new(get_standard_reconnect_strategy)
+            retries_to_attempt_fn: Box::new(get_standard_reconnect_strategy),
+            exit_if_first_connect_fails: false
         }
     }
 }
@@ -84,8 +94,13 @@ pub struct StubbornTcpStream {
 
 enum Status {
     Connected,
-    Disconnected(ReconnectStatus) 
-    // prob need finished status here
+    Disconnected(ReconnectStatus),
+    FailedAndExhausted // the way one feels after programming in dynamically typed languages
+}
+
+fn exhausted_err<T>() -> Poll<io::Result<T>> {
+    let io_err = io::Error::new(ErrorKind::NotConnected, "Disconnected. Connection attempts have been exhausted.");
+    Poll::Ready(Err(io_err))
 }
 
 // should be customizable by user
@@ -142,50 +157,111 @@ fn is_write_disconnect_detected<T>(poll_result: &Poll<io::Result<T>>) -> bool {
 
 impl StubbornTcpStream {
     pub async fn connect(addr: &SocketAddr) -> io::Result<Self> {
-        let tcp = TcpStream::connect(addr).await?;
-        let status = Status::Connected;
         let options = ReconnectOptions::new();
 
-        Ok(StubbornTcpStream { status, addr: *addr, stream: tcp, options })
+        let tcp = match TcpStream::connect(addr).await {
+            Ok(tcp) => {
+                println!("Initial connection succeeded.");
+                tcp
+            },
+            Err(e) => {
+                println!("Initial connection failed due to: {:?}.", e);
+                
+                if options.exit_if_first_connect_fails {
+                    println!("Bailing after initial connection failure.");
+                    return Err(e);
+                }
+                
+                let mut result = Err(e);
+                
+                for (i, duration) in (options.retries_to_attempt_fn)().enumerate() {
+                    let reconnect_num = i + 1;
+                    
+                    println!(
+                        "Will re-perform initial connect attempt #{} in {:?}.",
+                        reconnect_num,
+                        duration
+                    );
+                    
+                    Delay::new(Instant::now().add(duration)).await;
+
+                    println!("Attempting reconnect #{} now.", reconnect_num);
+
+                    match TcpStream::connect(addr).await {
+                        Ok(tcp) => {
+                            result = Ok(tcp);
+                            println!("Initial connection successfully established.");
+                            break;
+                        },
+                        Err(e) => { result = Err(e); }
+                    }
+                }
+                
+                match result {
+                    Ok(tcp) => tcp,
+                    Err(e) => return Err(e)
+                }
+            }
+        };
+        
+        Ok(StubbornTcpStream { status: Status::Connected, addr: *addr, stream: tcp, options })
     }
     
     fn on_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) {
         match &mut self.status {
             // initial disconnect
             Status::Connected => {
-                println!("Disconnect occured");
+                println!("Disconnect occurred");
                 self.status = Status::Disconnected(ReconnectStatus::new(&self.options));
             },
-            Status::Disconnected(_) => {}
+            Status::Disconnected(_) => {},
+            Status::FailedAndExhausted => unreachable!("on_disconnect will not occur for already exhausted state.")
         };
         
         let addr = self.addr;
 
         // this is ensured to be true now
         if let Status::Disconnected(reconnect_status) = &mut self.status {
-            let next_duration = reconnect_status.attempts_tracker.retries_remaining.next().expect("You idiots!!!");
+            
+            let next_duration = match reconnect_status.attempts_tracker.retries_remaining.next() {
+                Some(duration) => duration,
+                None => {
+                    println!("No more re-connect retries remaining. Giving up.");
+                    self.status = Status::FailedAndExhausted;
+                    return;
+                }
+            };
 
             let future_instant = Delay::new(Instant::now().add(next_duration));
+
+            reconnect_status.attempts_tracker.attempt_num += 1;
+            let cur_num = reconnect_status.attempts_tracker.attempt_num;
+
             let reconnect_attempt = async move {
                 future_instant.await;
+                println!("Attempting reconnect #{} now.", cur_num);
                 TcpStream::connect(&addr).await
             };
 
             reconnect_status.reconnect_attempt = Box::pin(reconnect_attempt);
-            reconnect_status.attempts_tracker.attempt_num += 1;
 
-            println!("Will attempt number: {}", reconnect_status.attempts_tracker.attempt_num);
+            println!(
+                "Will perform reconnect attempt #{} in {:?}.",
+                reconnect_status.attempts_tracker.attempt_num,
+                next_duration
+            );
 
             cx.waker().wake_by_ref();
         }
     }
     
-    fn poll_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) -> bool {
-        let attempt = match &mut self.status {
+    fn poll_disconnect(mut self: Pin<&mut Self>, cx: &mut Context){
+        let (attempt, attempt_num) = match &mut self.status {
             Status::Connected => panic!("Serious error ocurred!"),
-            Status::Disconnected(ref mut status) => Pin::new(&mut status.reconnect_attempt)
-        };         
-        
+            Status::Disconnected(ref mut status) => (Pin::new(&mut status.reconnect_attempt), status.attempts_tracker.attempt_num),
+            Status::FailedAndExhausted => unreachable!()
+        };
+
         cx.waker().wake_by_ref();
         
         match attempt.poll(cx) {
@@ -193,13 +269,12 @@ impl StubbornTcpStream {
                 println!("Connection re-established");
                 self.status = Status::Connected;
                 self.stream = stream;
-                true
             },
             Poll::Ready(Err(err)) => {
+                println!("Connection attempt #{} failed: {:?}", attempt_num, err);
                 self.on_disconnect(cx);
-                false
             },
-            Poll::Pending => false
+            Poll::Pending => {}
         }
     }
 }
@@ -213,6 +288,9 @@ impl AsyncRead for StubbornTcpStream {
                 self.stream.prepare_uninitialized_buffer(buf)
             },
             Status::Disconnected(_) => {
+                false
+            },
+            Status::FailedAndExhausted => {
                 false
             }
         }
@@ -237,7 +315,8 @@ impl AsyncRead for StubbornTcpStream {
             Status::Disconnected(_) => {
                 self.poll_disconnect(cx);
                 Poll::Pending
-            }
+            },
+            Status::FailedAndExhausted => exhausted_err()
         }
     }
 
@@ -260,7 +339,8 @@ impl AsyncRead for StubbornTcpStream {
             Status::Disconnected(_) => {
                 self.poll_disconnect(cx);
                 Poll::Pending
-            }
+            },
+            Status::FailedAndExhausted => exhausted_err()
         }
     }
 }
@@ -285,7 +365,8 @@ impl AsyncWrite for StubbornTcpStream {
             Status::Disconnected(_) => {
                 self.poll_disconnect(cx);
                 Poll::Pending
-            }
+            },
+            Status::FailedAndExhausted => exhausted_err()
         }
     }
 
@@ -304,7 +385,8 @@ impl AsyncWrite for StubbornTcpStream {
             Status::Disconnected(_) => {
                 self.poll_disconnect(cx);
                 Poll::Pending
-            }
+            },
+            Status::FailedAndExhausted => exhausted_err()
         }
     }
 
@@ -321,7 +403,8 @@ impl AsyncWrite for StubbornTcpStream {
             },
             Status::Disconnected(_) => {
                 Poll::Pending
-            }
+            },
+            Status::FailedAndExhausted => exhausted_err()
         }
     }
 
@@ -344,7 +427,8 @@ impl AsyncWrite for StubbornTcpStream {
             Status::Disconnected(_) => {
                 self.poll_disconnect(cx);
                 Poll::Pending
-            }
+            },
+            Status::FailedAndExhausted => exhausted_err()
         }
     }
 }
