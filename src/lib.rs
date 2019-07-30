@@ -14,7 +14,7 @@ use tokio::timer::Delay;
 use std::error::Error;
 use std::marker::PhantomData;
 use futures::future::Ready;
-
+use std::borrow::Borrow;
 
 trait UnderlyingIo<C> : Sized + Unpin where C: Clone + Unpin {
     fn create(ctor_arg: C) -> Pin<Box<dyn Future<Output=Result<Self, Box<dyn Error>>>>>;
@@ -179,8 +179,9 @@ fn is_write_disconnect_detected<T>(poll_result: &Poll<io::Result<T>>) -> bool {
 
 
 impl<T, C> StubbornIo<T, C> where T: UnderlyingIo<C>, C: Clone + Unpin + 'static {
-    pub async fn connect(ctor_arg: C) -> Result<Self, Box<dyn Error>> {
+    pub async fn connect(ctor_arg: impl Borrow<C>) -> Result<Self, Box<dyn Error>> {
         let options = ReconnectOptions::new();
+        let ctor_arg = ctor_arg.borrow().clone();
 
         let tcp = match T::create(ctor_arg.clone()).await {
             Ok(tcp) => {
