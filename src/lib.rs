@@ -11,6 +11,30 @@ use std::ops::{Deref, DerefMut, Add};
 use std::future::Future;
 use std::time::{Duration, Instant};
 use tokio::timer::Delay;
+use std::error::Error;
+use std::marker::PhantomData;
+use futures::future::Ready;
+
+
+trait UnderlyingIo<C> : Sized + Unpin where C: Clone + Unpin {
+    fn create(ctor_arg: C) -> Pin<Box<dyn Future<Output=Result<Self, Box<dyn Error>>>>>;
+}
+
+impl UnderlyingIo<SocketAddr> for TcpStream {
+    fn create(addr: SocketAddr) -> Pin<Box<dyn Future<Output=Result<Self, Box<dyn Error>>>>> {
+        let result = async move {
+            match TcpStream::connect(&addr).await {
+                Ok(tcp) => Ok(tcp),
+                Err(e) => Err(Box::new(e).into())
+            }
+        };
+        
+        Box::pin(result)
+    }
+}
+
+pub type StubbornTcpStream = StubbornIo<TcpStream, SocketAddr>;
+
 
 struct ReconnectOptions {
     retries_to_attempt_fn: Box<dyn Fn() -> Box<dyn Iterator<Item=Duration>>>,
@@ -22,9 +46,10 @@ struct AttemptsTracker {
     retries_remaining: Box<dyn Iterator<Item=Duration>>
 }
 
-struct ReconnectStatus {
+struct ReconnectStatus<T, C> {
     attempts_tracker: AttemptsTracker,
-    reconnect_attempt: Pin<Box<dyn Future<Output=io::Result<TcpStream>>>>
+    reconnect_attempt: Pin<Box<dyn Future<Output=Result<T, Box<dyn std::error::Error>>>>>,
+    _phantom_data: PhantomData<C>
 }
 
 
@@ -69,32 +94,30 @@ impl ReconnectOptions {
     }
 }
 
-impl ReconnectStatus {
+impl<T, C> ReconnectStatus<T, C> where T: UnderlyingIo<C>, C: Clone + Unpin + 'static {
     pub fn new(options: &ReconnectOptions) -> Self {
         ReconnectStatus {
             attempts_tracker: AttemptsTracker {
                 attempt_num: 0,
                 retries_remaining: (options.retries_to_attempt_fn)()
             },
-            reconnect_attempt: Box::pin(futures::future::err(
-                // This is to avoid making the reconnect_attempt an Option<Future>
-                io::Error::new(ErrorKind::NotConnected, "Start in disconnected state")
-            ))
+            reconnect_attempt: Box::pin(async { unreachable!("Not going to happen") }), // rethink this
+            _phantom_data: PhantomData
         }
     }
 }
 
 
-pub struct StubbornTcpStream {
-    status: Status,
-    addr: SocketAddr,
-    stream: TcpStream,
-    options: ReconnectOptions
+pub struct StubbornIo<T, C> {
+    status: Status<T, C>,
+    stream: T,
+    options: ReconnectOptions,
+    ctor_arg: C
 }
 
-enum Status {
+enum Status<T, C> {
     Connected,
-    Disconnected(ReconnectStatus),
+    Disconnected(ReconnectStatus<T, C>),
     FailedAndExhausted // the way one feels after programming in dynamically typed languages
 }
 
@@ -122,15 +145,15 @@ fn is_error_fatal(err: &std::io::Error) -> bool {
     }
 }
 
-impl Deref for StubbornTcpStream {
-    type Target = TcpStream;
+impl<T, C> Deref for StubbornIo<T, C> {
+    type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.stream
     }
 }
 
-impl DerefMut for StubbornTcpStream {
+impl<T, C> DerefMut for StubbornIo<T, C> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.stream
     }
@@ -155,11 +178,11 @@ fn is_write_disconnect_detected<T>(poll_result: &Poll<io::Result<T>>) -> bool {
 }
 
 
-impl StubbornTcpStream {
-    pub async fn connect(addr: &SocketAddr) -> io::Result<Self> {
+impl<T, C> StubbornIo<T, C> where T: UnderlyingIo<C>, C: Clone + Unpin + 'static {
+    pub async fn connect(ctor_arg: C) -> Result<Self, Box<dyn Error>> {
         let options = ReconnectOptions::new();
 
-        let tcp = match TcpStream::connect(addr).await {
+        let tcp = match T::create(ctor_arg.clone()).await {
             Ok(tcp) => {
                 println!("Initial connection succeeded.");
                 tcp
@@ -187,7 +210,7 @@ impl StubbornTcpStream {
 
                     println!("Attempting reconnect #{} now.", reconnect_num);
 
-                    match TcpStream::connect(addr).await {
+                    match T::create(ctor_arg.clone()).await {
                         Ok(tcp) => {
                             result = Ok(tcp);
                             println!("Initial connection successfully established.");
@@ -204,7 +227,7 @@ impl StubbornTcpStream {
             }
         };
         
-        Ok(StubbornTcpStream { status: Status::Connected, addr: *addr, stream: tcp, options })
+        Ok(StubbornIo { status: Status::Connected, ctor_arg, stream: tcp, options })
     }
     
     fn on_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) {
@@ -218,7 +241,7 @@ impl StubbornTcpStream {
             Status::FailedAndExhausted => unreachable!("on_disconnect will not occur for already exhausted state.")
         };
         
-        let addr = self.addr;
+        let addr = self.ctor_arg.clone();
 
         // this is ensured to be true now
         if let Status::Disconnected(reconnect_status) = &mut self.status {
@@ -240,7 +263,7 @@ impl StubbornTcpStream {
             let reconnect_attempt = async move {
                 future_instant.await;
                 println!("Attempting reconnect #{} now.", cur_num);
-                TcpStream::connect(&addr).await
+                T::create(addr).await
             };
 
             reconnect_status.reconnect_attempt = Box::pin(reconnect_attempt);
@@ -281,7 +304,7 @@ impl StubbornTcpStream {
 
 // ===== impl Read / Write =====
 
-impl AsyncRead for StubbornTcpStream {
+impl<T, C> AsyncRead for StubbornIo<T, C> where T: UnderlyingIo<C> + AsyncRead, C: Clone + Unpin + 'static {
     unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [u8]) -> bool {
         match &self.status {
             Status::Connected => {
@@ -345,7 +368,7 @@ impl AsyncRead for StubbornTcpStream {
     }
 }
 
-impl AsyncWrite for StubbornTcpStream {
+impl<T, C> AsyncWrite for StubbornIo<T, C> where T: UnderlyingIo<C> + AsyncWrite, C: Clone + Unpin + 'static {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,

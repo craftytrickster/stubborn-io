@@ -1,6 +1,6 @@
 #![feature(async_await)]
 
-use stubborn_stream::StubbornTcpStream;
+use stubborn_stream::{StubbornTcpStream, StubbornIo};
 use tokio;
 use std::net::{SocketAddr, SocketAddrV4};
 use std::future::Future;
@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr: SocketAddrV4 = "127.0.0.1:2000".parse().unwrap();
     let addr = SocketAddr::V4(addr);
     
-    let connection = StubbornTcpStream::connect(&addr).await.expect("Where's the connection");
+    let connection = StubbornTcpStream::connect(addr).await.expect("Where's the connection");
     let thing = MainLoop::new(connection, rx);
 
     thing.await;
