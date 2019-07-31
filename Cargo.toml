@@ -1,5 +1,5 @@
 [package]
-name = "stubborn-stream" # stubborn-io
+name = "stubborn-io"
 version = "0.1.0"
 authors = ["David Raifaizen <d-raif@hotmail.com>"]
 edition = "2018"

@@ -1,6 +1,6 @@
 #![feature(async_await)]
 
-use stubborn_stream::{StubbornTcpStream};
+use stubborn_io::{StubbornTcpStream};
 use tokio;
 use std::net::{SocketAddr, SocketAddrV4};
 use std::future::Future;

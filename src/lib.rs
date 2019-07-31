@@ -16,8 +16,11 @@ use std::marker::PhantomData;
 use futures::future::Ready;
 use std::borrow::Borrow;
 
+pub mod tokio;
+
 trait UnderlyingIo<C> : Sized + Unpin where C: Clone + Unpin {
     fn create(ctor_arg: C) -> Pin<Box<dyn Future<Output=Result<Self, Box<dyn Error>>>>>;
+    // ADD METHOD FOR DETECT IF POLL IS ERROR
 }
 
 impl UnderlyingIo<SocketAddr> for TcpStream {
