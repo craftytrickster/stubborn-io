@@ -1,7 +1,9 @@
 #![feature(async_await)]
 
 pub mod tokio;
+pub mod config;
 
 pub mod prelude {
-    pub use super::tokio::{ReconnectOptions, StubbornTcpStream};
+    pub use super::config::ReconnectOptions;
+    pub use super::tokio::StubbornTcpStream;
 }

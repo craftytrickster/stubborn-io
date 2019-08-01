@@ -1,3 +1,4 @@
+use crate::config::ReconnectOptions;
 use bytes::{Buf, BufMut};
 use std::borrow::Borrow;
 use std::error::Error;
@@ -16,12 +17,20 @@ where
     C: Clone + Unpin,
 {
     fn create(ctor_arg: C) -> Pin<Box<dyn Future<Output = Result<Self, Box<dyn Error>>>>>;
-    // ADD METHOD FOR DETECT IF POLL IS ERROR
-}
 
-pub struct ReconnectOptions {
-    retries_to_attempt_fn: Box<dyn Fn() -> Box<dyn Iterator<Item = Duration>>>,
-    exit_if_first_connect_fails: bool,
+    fn is_disconnect_error(&self, err: &io::Error) -> bool {
+        use std::io::ErrorKind::*;
+
+        match err.kind() {
+            NotFound | PermissionDenied | ConnectionRefused | ConnectionReset | ConnectionAborted
+            | NotConnected | AddrInUse | AddrNotAvailable | BrokenPipe | AlreadyExists => true,
+            _ => false,
+        }
+    }
+    
+    fn is_final_read(&self, received_bytes: usize) -> bool {
+        received_bytes == 0 // definitely true for tcp, perhaps true for other io as well
+    }
 }
 
 struct AttemptsTracker {
@@ -35,43 +44,6 @@ struct ReconnectStatus<T, C> {
     _phantom_data: PhantomData<C>,
 }
 
-fn get_standard_reconnect_strategy() -> Box<dyn Iterator<Item = Duration>> {
-    let initial_attempts = vec![
-        Duration::from_secs(3),
-        Duration::from_secs(3),
-        Duration::from_secs(3),
-    ];
-
-    //    let initial_attempts = vec![
-    //        Duration::from_secs(5),
-    //        Duration::from_secs(10),
-    //        Duration::from_secs(20),
-    //        Duration::from_secs(30),
-    //        Duration::from_secs(40),
-    //        Duration::from_secs(50),
-    //        Duration::from_secs(60),
-    //        Duration::from_secs(60 * 2),
-    //        Duration::from_secs(60 * 5),
-    //        Duration::from_secs(60 * 10),
-    //        Duration::from_secs(60 * 20),
-    //    ];
-    //
-    //    let repeat = std::iter::repeat(Duration::from_secs(60 * 30));
-    //
-    //    let forever_iterator = initial_attempts.into_iter().chain(repeat.into_iter());
-
-    let forever_iterator = initial_attempts.into_iter();
-    Box::new(forever_iterator)
-}
-
-impl ReconnectOptions {
-    pub fn new() -> Self {
-        ReconnectOptions {
-            retries_to_attempt_fn: Box::new(get_standard_reconnect_strategy),
-            exit_if_first_connect_fails: false,
-        }
-    }
-}
 
 impl<T, C> ReconnectStatus<T, C>
 where
@@ -84,7 +56,7 @@ where
                 attempt_num: 0,
                 retries_remaining: (options.retries_to_attempt_fn)(),
             },
-            reconnect_attempt: Box::pin(async { unreachable!("Not going to happen") }), // rethink this
+            reconnect_attempt: Box::pin(async { unreachable!("Not going to happen") }), // rethink
             _phantom_data: PhantomData,
         }
     }
@@ -111,16 +83,6 @@ fn exhausted_err<T>() -> Poll<io::Result<T>> {
     Poll::Ready(Err(io_err))
 }
 
-// should be customizable by user
-fn is_error_fatal(err: &std::io::Error) -> bool {
-    use std::io::ErrorKind::*;
-
-    match err.kind() {
-        NotFound | PermissionDenied | ConnectionRefused | ConnectionReset | ConnectionAborted
-        | NotConnected | AddrInUse | AddrNotAvailable | BrokenPipe | AlreadyExists => true,
-        _ => false,
-    }
-}
 
 impl<T, C> Deref for StubbornIo<T, C> {
     type Target = T;
@@ -136,22 +98,6 @@ impl<T, C> DerefMut for StubbornIo<T, C> {
     }
 }
 
-// these should be part of the trait, alongside the is error fatal
-// that way it can be specialized for the read 0 case for the tcp one
-fn is_read_disconnect_detected(poll_result: &Poll<io::Result<usize>>) -> bool {
-    match poll_result {
-        Poll::Ready(Ok(size)) if *size == 0 => true, // perhaps this is only true in tcp
-        Poll::Ready(Err(err)) => is_error_fatal(err),
-        _ => false,
-    }
-}
-
-fn is_write_disconnect_detected<T>(poll_result: &Poll<io::Result<T>>) -> bool {
-    match poll_result {
-        Poll::Ready(Err(err)) => is_error_fatal(err),
-        _ => false,
-    }
-}
 
 impl<T, C> StubbornIo<T, C>
 where
@@ -289,9 +235,24 @@ where
             Poll::Pending => {}
         }
     }
-}
 
-// ===== impl Read / Write =====
+    // these should be part of the trait, alongside the is error fatal
+    // that way it can be specialized for the read 0 case for the tcp one
+    fn is_read_disconnect_detected(&self, poll_result: &Poll<io::Result<usize>>) -> bool {
+        match poll_result {
+            Poll::Ready(Ok(size)) if self.is_final_read(*size) => true, // perhaps this is only true in tcp // make this in a trait
+            Poll::Ready(Err(err)) => self.is_disconnect_error(err),
+            _ => false,
+        }
+    }
+
+    fn is_write_disconnect_detected<X>(&self, poll_result: &Poll<io::Result<X>>) -> bool {
+        match poll_result {
+            Poll::Ready(Err(err)) => self.is_disconnect_error(err),
+            _ => false,
+        }
+    }
+}
 
 impl<T, C> AsyncRead for StubbornIo<T, C>
 where
@@ -315,7 +276,7 @@ where
             Status::Connected => {
                 let poll = AsyncRead::poll_read(Pin::new(&mut self.stream), cx, buf);
 
-                if is_read_disconnect_detected(&poll) {
+                if self.is_read_disconnect_detected(&poll) {
                     self.on_disconnect(cx);
                     Poll::Pending
                 } else {
@@ -339,7 +300,7 @@ where
             Status::Connected => {
                 let poll = AsyncRead::poll_read_buf(Pin::new(&mut self.stream), cx, buf);
 
-                if is_read_disconnect_detected(&poll) {
+                if self.is_read_disconnect_detected(&poll) {
                     self.on_disconnect(cx);
                     Poll::Pending
                 } else {
@@ -369,7 +330,7 @@ where
             Status::Connected => {
                 let poll = AsyncWrite::poll_write(Pin::new(&mut self.stream), cx, buf);
 
-                if is_write_disconnect_detected(&poll) {
+                if self.is_write_disconnect_detected(&poll) {
                     self.on_disconnect(cx);
                     Poll::Pending
                 } else {
@@ -389,7 +350,7 @@ where
             Status::Connected => {
                 let poll = AsyncWrite::poll_flush(Pin::new(&mut self.stream), cx);
 
-                if is_write_disconnect_detected(&poll) {
+                if self.is_write_disconnect_detected(&poll) {
                     self.on_disconnect(cx);
                     Poll::Pending
                 } else {
@@ -429,7 +390,7 @@ where
             Status::Connected => {
                 let poll = AsyncWrite::poll_write_buf(Pin::new(&mut self.stream), cx, buf);
 
-                if is_write_disconnect_detected(&poll) {
+                if self.is_write_disconnect_detected(&poll) {
                     self.on_disconnect(cx);
                     Poll::Pending
                 } else {
