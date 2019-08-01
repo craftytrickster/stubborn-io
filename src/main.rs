@@ -7,6 +7,8 @@ use std::net::{SocketAddr, SocketAddrV4};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::thread;
+use std::time::Duration;
+use stubborn_io::config::ReconnectOptions;
 use stubborn_io::tokio::StubbornTcpStream;
 use tokio;
 use tokio::codec::{Framed, LinesCodec};
@@ -70,7 +72,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr: SocketAddrV4 = "127.0.0.1:2000".parse().unwrap();
     let addr = SocketAddr::V4(addr);
 
-    let connection = StubbornTcpStream::connect(&addr)
+    let options = ReconnectOptions::new().with_retries_generator(|| {
+        vec![
+            Duration::from_secs(2),
+            Duration::from_secs(2),
+            Duration::from_secs(2),
+        ]
+    });
+
+    let connection = StubbornTcpStream::connect_with_options(&addr, options)
         .await
         .expect("Where's the connection");
     let thing = MainLoop::new(connection, rx);

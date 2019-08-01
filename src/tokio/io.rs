@@ -22,12 +22,13 @@ where
         use std::io::ErrorKind::*;
 
         match err.kind() {
-            NotFound | PermissionDenied | ConnectionRefused | ConnectionReset | ConnectionAborted
-            | NotConnected | AddrInUse | AddrNotAvailable | BrokenPipe | AlreadyExists => true,
+            NotFound | PermissionDenied | ConnectionRefused | ConnectionReset
+            | ConnectionAborted | NotConnected | AddrInUse | AddrNotAvailable | BrokenPipe
+            | AlreadyExists => true,
             _ => false,
         }
     }
-    
+
     fn is_final_read(&self, received_bytes: usize) -> bool {
         received_bytes == 0 // definitely true for tcp, perhaps true for other io as well
     }
@@ -44,7 +45,6 @@ struct ReconnectStatus<T, C> {
     _phantom_data: PhantomData<C>,
 }
 
-
 impl<T, C> ReconnectStatus<T, C>
 where
     T: UnderlyingIo<C>,
@@ -56,7 +56,7 @@ where
                 attempt_num: 0,
                 retries_remaining: (options.retries_to_attempt_fn)(),
             },
-            reconnect_attempt: Box::pin(async { unreachable!("Not going to happen") }), // rethink
+            reconnect_attempt: Box::pin(async { unreachable!("Not going to happen") }), // rethink this please
             _phantom_data: PhantomData,
         }
     }
@@ -83,7 +83,6 @@ fn exhausted_err<T>() -> Poll<io::Result<T>> {
     Poll::Ready(Err(io_err))
 }
 
-
 impl<T, C> Deref for StubbornIo<T, C> {
     type Target = T;
 
@@ -98,7 +97,6 @@ impl<T, C> DerefMut for StubbornIo<T, C> {
     }
 }
 
-
 impl<T, C> StubbornIo<T, C>
 where
     T: UnderlyingIo<C>,
@@ -106,6 +104,13 @@ where
 {
     pub async fn connect(ctor_arg: impl Borrow<C>) -> Result<Self, Box<dyn Error>> {
         let options = ReconnectOptions::new();
+        Self::connect_with_options(ctor_arg, options).await
+    }
+
+    pub async fn connect_with_options(
+        ctor_arg: impl Borrow<C>,
+        options: ReconnectOptions,
+    ) -> Result<Self, Box<dyn Error>> {
         let ctor_arg = ctor_arg.borrow().clone();
 
         let tcp = match T::create(ctor_arg.clone()).await {
