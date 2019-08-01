@@ -1,11 +1,12 @@
 [package]
 name = "stubborn-io"
-version = "0.1.0"
-authors = ["David Raifaizen <d-raif@hotmail.com>"]
+version = "0.1.1"
+authors = ["David Raifaizen <d-raif@outlook.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
+description = "io traits/structs that automatically recover from potential disconnections/interruptions."
+license = "MIT"
+keywords = ["reconnect", "persistent", "stubborn", "io"]
+ 
 [dependencies]
 tokio = { git = "https://github.com/tokio-rs/tokio", features = ["rt-full"] }
 futures-preview = { version = "=0.3.0-alpha.17", features = ["async-await", "nightly"] }
