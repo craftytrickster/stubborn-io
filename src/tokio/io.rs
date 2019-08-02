@@ -11,6 +11,7 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
 use tokio::timer::Delay;
+use log::{info, error};
 
 pub trait UnderlyingIo<C>: Sized + Unpin
 where
@@ -56,7 +57,7 @@ where
                 attempt_num: 0,
                 retries_remaining: (options.retries_to_attempt_fn)(),
             },
-            reconnect_attempt: Box::pin(async { unreachable!("Not going to happen") }), // rethink this please
+            reconnect_attempt: Box::pin(async { unreachable!("Not going to happen") }),
             _phantom_data: PhantomData,
         }
     }
@@ -115,14 +116,14 @@ where
 
         let tcp = match T::create(ctor_arg.clone()).await {
             Ok(tcp) => {
-                println!("Initial connection succeeded.");
+                info!("Initial connection succeeded.");
                 tcp
             }
             Err(e) => {
-                println!("Initial connection failed due to: {:?}.", e);
+                error!("Initial connection failed due to: {:?}.", e);
 
                 if options.exit_if_first_connect_fails {
-                    println!("Bailing after initial connection failure.");
+                    error!("Bailing after initial connection failure.");
                     return Err(e);
                 }
 
@@ -131,19 +132,19 @@ where
                 for (i, duration) in (options.retries_to_attempt_fn)().enumerate() {
                     let reconnect_num = i + 1;
 
-                    println!(
+                    info!(
                         "Will re-perform initial connect attempt #{} in {:?}.",
                         reconnect_num, duration
                     );
 
                     Delay::new(Instant::now().add(duration)).await;
 
-                    println!("Attempting reconnect #{} now.", reconnect_num);
+                    info!("Attempting reconnect #{} now.", reconnect_num);
 
                     match T::create(ctor_arg.clone()).await {
                         Ok(tcp) => {
                             result = Ok(tcp);
-                            println!("Initial connection successfully established.");
+                            info!("Initial connection successfully established.");
                             break;
                         }
                         Err(e) => {
@@ -154,7 +155,10 @@ where
 
                 match result {
                     Ok(tcp) => tcp,
-                    Err(e) => return Err(e),
+                    Err(e) => {
+                        error!("No more re-connect retries remaining. Never able to establish initial connection.");
+                        return Err(e)
+                    },
                 }
             }
         };
@@ -171,7 +175,7 @@ where
         match &mut self.status {
             // initial disconnect
             Status::Connected => {
-                println!("Disconnect occurred");
+                error!("Disconnect occurred");
                 self.status = Status::Disconnected(ReconnectStatus::new(&self.options));
             }
             Status::Disconnected(_) => {}
@@ -180,14 +184,14 @@ where
             }
         };
 
-        let addr = self.ctor_arg.clone();
+        let ctor_arg = self.ctor_arg.clone();
 
         // this is ensured to be true now
         if let Status::Disconnected(reconnect_status) = &mut self.status {
             let next_duration = match reconnect_status.attempts_tracker.retries_remaining.next() {
                 Some(duration) => duration,
                 None => {
-                    println!("No more re-connect retries remaining. Giving up.");
+                    error!("No more re-connect retries remaining. Giving up.");
                     self.status = Status::FailedAndExhausted;
                     return;
                 }
@@ -200,13 +204,13 @@ where
 
             let reconnect_attempt = async move {
                 future_instant.await;
-                println!("Attempting reconnect #{} now.", cur_num);
-                T::create(addr).await
+                info!("Attempting reconnect #{} now.", cur_num);
+                T::create(ctor_arg).await
             };
 
             reconnect_status.reconnect_attempt = Box::pin(reconnect_attempt);
 
-            println!(
+            info!(
                 "Will perform reconnect attempt #{} in {:?}.",
                 reconnect_status.attempts_tracker.attempt_num, next_duration
             );
@@ -217,7 +221,7 @@ where
 
     fn poll_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) {
         let (attempt, attempt_num) = match &mut self.status {
-            Status::Connected => panic!("Serious error ocurred!"),
+            Status::Connected => unreachable!(),
             Status::Disconnected(ref mut status) => (
                 Pin::new(&mut status.reconnect_attempt),
                 status.attempts_tracker.attempt_num,
@@ -225,27 +229,24 @@ where
             Status::FailedAndExhausted => unreachable!(),
         };
 
-        cx.waker().wake_by_ref();
-
         match attempt.poll(cx) {
             Poll::Ready(Ok(stream)) => {
-                println!("Connection re-established");
+                info!("Connection re-established");
+                cx.waker().wake_by_ref();
                 self.status = Status::Connected;
                 self.stream = stream;
             }
             Poll::Ready(Err(err)) => {
-                println!("Connection attempt #{} failed: {:?}", attempt_num, err);
+                error!("Connection attempt #{} failed: {:?}", attempt_num, err);
                 self.on_disconnect(cx);
             }
             Poll::Pending => {}
         }
     }
 
-    // these should be part of the trait, alongside the is error fatal
-    // that way it can be specialized for the read 0 case for the tcp one
     fn is_read_disconnect_detected(&self, poll_result: &Poll<io::Result<usize>>) -> bool {
         match poll_result {
-            Poll::Ready(Ok(size)) if self.is_final_read(*size) => true, // perhaps this is only true in tcp // make this in a trait
+            Poll::Ready(Ok(size)) if self.is_final_read(*size) => true,
             Poll::Ready(Err(err)) => self.is_disconnect_error(err),
             _ => false,
         }
