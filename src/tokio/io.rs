@@ -13,12 +13,19 @@ use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
 use tokio::timer::Delay;
 
+/// Trait that should be implemented for an [AsyncRead] and/or [AsyncWrite]
+/// item to enable it to work with the [StubbornIo] struct.
 pub trait UnderlyingIo<C>: Sized + Unpin
 where
     C: Clone + Unpin,
 {
+    /// The creation function is used by StubbornIo in order to establish both the initial IO connection
+    /// in addition to performing reconnects.
     fn create(ctor_arg: C) -> Pin<Box<dyn Future<Output = Result<Self, Box<dyn Error>>>>>;
 
+    /// When IO items experience an [io::Error](io::Error) during operation, it does not necessarily mean
+    /// it is a disconnect/termination (ex: WouldBlock). This trait provides sensible defaults to classify
+    /// which errors are considered "disconnects", but this can be overridden based on the user's needs.
     fn is_disconnect_error(&self, err: &io::Error) -> bool {
         use std::io::ErrorKind::*;
 
@@ -30,6 +37,9 @@ where
         }
     }
 
+    /// If the underlying IO item implements AsyncRead, this method allows the user to specify
+    /// if a technically successful read actually means that the connect is closed.
+    /// For example, tokio's TcpStream successfully performs a read of 0 bytes when closed.
     fn is_final_read(&self, received_bytes: usize) -> bool {
         received_bytes == 0 // definitely true for tcp, perhaps true for other io as well
     }
@@ -63,9 +73,12 @@ where
     }
 }
 
+/// The StubbornIo is a wrapper over a tokio AsyncRead/AsyncWrite item that will automatically
+/// invoke the [UnderlyingIo::create] upon initialization and when a reconnect is needed.
+/// Because it implements deref, you are able to invoke all of the original methods on the wrapped IO.
 pub struct StubbornIo<T, C> {
     status: Status<T, C>,
-    stream: T,
+    underlying_io: T,
     options: ReconnectOptions,
     ctor_arg: C,
 }
@@ -88,13 +101,13 @@ impl<T, C> Deref for StubbornIo<T, C> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.stream
+        &self.underlying_io
     }
 }
 
 impl<T, C> DerefMut for StubbornIo<T, C> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.stream
+        &mut self.underlying_io
     }
 }
 
@@ -166,7 +179,7 @@ where
         Ok(StubbornIo {
             status: Status::Connected,
             ctor_arg,
-            stream: tcp,
+            underlying_io: tcp,
             options,
         })
     }
@@ -230,11 +243,11 @@ where
         };
 
         match attempt.poll(cx) {
-            Poll::Ready(Ok(stream)) => {
+            Poll::Ready(Ok(underlying_io)) => {
                 info!("Connection re-established");
                 cx.waker().wake_by_ref();
                 self.status = Status::Connected;
-                self.stream = stream;
+                self.underlying_io = underlying_io;
             }
             Poll::Ready(Err(err)) => {
                 error!("Connection attempt #{} failed: {:?}", attempt_num, err);
@@ -267,7 +280,7 @@ where
 {
     unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [u8]) -> bool {
         match &self.status {
-            Status::Connected => self.stream.prepare_uninitialized_buffer(buf),
+            Status::Connected => self.underlying_io.prepare_uninitialized_buffer(buf),
             Status::Disconnected(_) => false,
             Status::FailedAndExhausted => false,
         }
@@ -280,7 +293,7 @@ where
     ) -> Poll<io::Result<usize>> {
         match &mut self.status {
             Status::Connected => {
-                let poll = AsyncRead::poll_read(Pin::new(&mut self.stream), cx, buf);
+                let poll = AsyncRead::poll_read(Pin::new(&mut self.underlying_io), cx, buf);
 
                 if self.is_read_disconnect_detected(&poll) {
                     self.on_disconnect(cx);
@@ -304,7 +317,7 @@ where
     ) -> Poll<io::Result<usize>> {
         match &mut self.status {
             Status::Connected => {
-                let poll = AsyncRead::poll_read_buf(Pin::new(&mut self.stream), cx, buf);
+                let poll = AsyncRead::poll_read_buf(Pin::new(&mut self.underlying_io), cx, buf);
 
                 if self.is_read_disconnect_detected(&poll) {
                     self.on_disconnect(cx);
@@ -334,7 +347,7 @@ where
     ) -> Poll<io::Result<usize>> {
         match &mut self.status {
             Status::Connected => {
-                let poll = AsyncWrite::poll_write(Pin::new(&mut self.stream), cx, buf);
+                let poll = AsyncWrite::poll_write(Pin::new(&mut self.underlying_io), cx, buf);
 
                 if self.is_write_disconnect_detected(&poll) {
                     self.on_disconnect(cx);
@@ -354,7 +367,7 @@ where
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match &mut self.status {
             Status::Connected => {
-                let poll = AsyncWrite::poll_flush(Pin::new(&mut self.stream), cx);
+                let poll = AsyncWrite::poll_flush(Pin::new(&mut self.underlying_io), cx);
 
                 if self.is_write_disconnect_detected(&poll) {
                     self.on_disconnect(cx);
@@ -374,7 +387,7 @@ where
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match &mut self.status {
             Status::Connected => {
-                let poll = AsyncWrite::poll_shutdown(Pin::new(&mut self.stream), cx);
+                let poll = AsyncWrite::poll_shutdown(Pin::new(&mut self.underlying_io), cx);
                 if let Poll::Ready(_) = poll {
                     // if completed, we are disconnected whether error or not
                     self.on_disconnect(cx);
@@ -394,7 +407,7 @@ where
     ) -> Poll<io::Result<usize>> {
         match &mut self.status {
             Status::Connected => {
-                let poll = AsyncWrite::poll_write_buf(Pin::new(&mut self.stream), cx, buf);
+                let poll = AsyncWrite::poll_write_buf(Pin::new(&mut self.underlying_io), cx, buf);
 
                 if self.is_write_disconnect_detected(&poll) {
                     self.on_disconnect(cx);
