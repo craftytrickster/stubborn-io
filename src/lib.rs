@@ -7,6 +7,10 @@
 //! If you need to create your own, you simply need to implement the [UnderlyingIo](crate::tokio::UnderlyingIo) trait.
 //! Once implemented, you can construct it easily by creating a [StubbornIo](crate::tokio::StubbornIo) type as seen below.
 //!
+//! #### Compiler Warning
+//! This crate only works on **nightly**, as it is dependent on async/await. 
+//! Once that is stabilized in Rust 1.38, it will work in regular Rust.
+//! 
 //! ### Motivations
 //! This crate was created because I was working on a service that needed to fetch data from a remote server
 //! via a tokio TcpConnection. It normally worked perfectly (as does all of my code ☺), but every time the
@@ -44,7 +48,7 @@
 //! type HomemadeStubbornFile = StubbornIo<File, PathBuf>;
 //! let path = PathBuf::from("./foo/bar.txt");
 //!
-//! let connect_future = HomemadeStubbornFile::connect(&path);
+//! let stubborn_file = HomemadeStubbornFile::connect(&path).await?;
 //! // ... application logic here
 //! ```
 
