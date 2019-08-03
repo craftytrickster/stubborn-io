@@ -1,5 +1,6 @@
 use crate::config::ReconnectOptions;
 use bytes::{Buf, BufMut};
+use log::{error, info};
 use std::borrow::Borrow;
 use std::error::Error;
 use std::future::Future;
@@ -11,7 +12,6 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
 use tokio::timer::Delay;
-use log::{info, error};
 
 pub trait UnderlyingIo<C>: Sized + Unpin
 where
@@ -157,8 +157,8 @@ where
                     Ok(tcp) => tcp,
                     Err(e) => {
                         error!("No more re-connect retries remaining. Never able to establish initial connection.");
-                        return Err(e)
-                    },
+                        return Err(e);
+                    }
                 }
             }
         };
