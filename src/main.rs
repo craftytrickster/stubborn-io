@@ -33,7 +33,6 @@ impl Future for MainLoop {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         let _ = self.rx.poll_recv(cx).map(|item| {
-            let _ = Pin::new(&mut self.framed).poll_flush(cx);
             let _ = Pin::new(&mut self.framed).start_send(item.unwrap());
             let _ = Pin::new(&mut self.framed).poll_flush(cx);
 
@@ -72,13 +71,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr: SocketAddrV4 = "127.0.0.1:2000".parse().unwrap();
     let addr = SocketAddr::V4(addr);
 
-    let options = ReconnectOptions::new().with_retries_generator(|| {
-        vec![
-            Duration::from_secs(2),
-            Duration::from_secs(2),
-            Duration::from_secs(2),
-        ]
-    });
+    let options = ReconnectOptions::new()
+        .with_retries_generator(|| {
+            vec![
+                Duration::from_secs(2),
+                Duration::from_secs(2),
+                Duration::from_secs(2),
+            ]
+        })
+        .with_on_connect_callback(|| println!("CONNECTED"))
+        .with_on_disconnect_callback(|| println!("DISCONNECTED"))
+        .with_on_connect_fail_callback(|| println!("CONNECT_FAIL"));
 
     let connection = StubbornTcpStream::connect_with_options(&addr, options)
         .await

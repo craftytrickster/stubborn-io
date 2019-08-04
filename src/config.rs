@@ -12,6 +12,15 @@ pub struct ReconnectOptions {
     /// If this is set to true, if the initial connect method of the stubborn-io item fails,
     /// then no further reconnects will be attempted
     pub exit_if_first_connect_fails: bool,
+
+    /// Invoked when the StubbornIo establishes a connection
+    pub on_connect_callback: Box<dyn Fn()>,
+
+    /// Invoked when the StubbornIo loses its active connection
+    pub on_disconnect_callback: Box<dyn Fn()>,
+
+    /// Invoked when the StubbornIo fails a connection attempt
+    pub on_connect_fail_callback: Box<dyn Fn()>,
 }
 
 impl ReconnectOptions {
@@ -22,6 +31,9 @@ impl ReconnectOptions {
         ReconnectOptions {
             retries_to_attempt_fn: Box::new(get_standard_reconnect_strategy),
             exit_if_first_connect_fails: false,
+            on_connect_callback: Box::new(|| {}),
+            on_disconnect_callback: Box::new(|| {}),
+            on_connect_fail_callback: Box::new(|| {}),
         }
     }
 
@@ -54,8 +66,18 @@ impl ReconnectOptions {
         self
     }
 
-    pub fn with_exit_on_initial_fail(mut self, exit: bool) -> Self {
-        self.exit_if_first_connect_fails = exit;
+    pub fn with_on_connect_callback(mut self, cb: impl Fn() + 'static) -> Self {
+        self.on_connect_callback = Box::new(cb);
+        self
+    }
+
+    pub fn with_on_disconnect_callback(mut self, cb: impl Fn() + 'static) -> Self {
+        self.on_disconnect_callback = Box::new(cb);
+        self
+    }
+
+    pub fn with_on_connect_fail_callback(mut self, cb: impl Fn() + 'static) -> Self {
+        self.on_connect_fail_callback = Box::new(cb);
         self
     }
 }

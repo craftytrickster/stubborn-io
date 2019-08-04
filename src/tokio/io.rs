@@ -130,10 +130,12 @@ where
         let tcp = match T::create(ctor_arg.clone()).await {
             Ok(tcp) => {
                 info!("Initial connection succeeded.");
+                (options.on_connect_callback)();
                 tcp
             }
             Err(e) => {
                 error!("Initial connection failed due to: {:?}.", e);
+                (options.on_connect_fail_callback)();
 
                 if options.exit_if_first_connect_fails {
                     error!("Bailing after initial connection failure.");
@@ -157,10 +159,12 @@ where
                     match T::create(ctor_arg.clone()).await {
                         Ok(tcp) => {
                             result = Ok(tcp);
+                            (options.on_connect_callback)();
                             info!("Initial connection successfully established.");
                             break;
                         }
                         Err(e) => {
+                            (options.on_connect_fail_callback)();
                             result = Err(e);
                         }
                     }
@@ -189,9 +193,12 @@ where
             // initial disconnect
             Status::Connected => {
                 error!("Disconnect occurred");
+                (self.options.on_disconnect_callback)();
                 self.status = Status::Disconnected(ReconnectStatus::new(&self.options));
             }
-            Status::Disconnected(_) => {}
+            Status::Disconnected(_) => {
+                (self.options.on_connect_fail_callback)();
+            }
             Status::FailedAndExhausted => {
                 unreachable!("on_disconnect will not occur for already exhausted state.")
             }
@@ -206,6 +213,7 @@ where
                 None => {
                     error!("No more re-connect retries remaining. Giving up.");
                     self.status = Status::FailedAndExhausted;
+                    cx.waker().wake_by_ref();
                     return;
                 }
             };
@@ -247,6 +255,7 @@ where
                 info!("Connection re-established");
                 cx.waker().wake_by_ref();
                 self.status = Status::Connected;
+                (self.options.on_connect_callback)();
                 self.underlying_io = underlying_io;
             }
             Poll::Ready(Err(err)) => {
