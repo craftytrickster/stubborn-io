@@ -25,24 +25,25 @@
 //! ``` ignore
 //! #![feature(async_await)]
 //!
-//! use stubborn_io::tokio::{UnderlyingIo, StubbornIo};
-//! use tokio::fs::File;
-//! use std::pin::Pin;
-//! use std::future::Future;
 //! use std::error::Error;
+//! use std::future::Future;
 //! use std::path::PathBuf;
+//! use std::pin::Pin;
+//! use stubborn_io::tokio::{StubbornIo, UnderlyingIo};
+//! use tokio::fs::File;
 //!
-//! impl UnderlyingIo<PathBuf> for File  {
-
-//!    // Implementing the creation function that will be used to establish an io connection.
-//!    // Additionally, this will be used when reconnect tries are attempted.
-//!    fn create(path: PathBuf) -> Pin<Box<dyn Future<Output = Result<Self, Box<dyn Error>>>>> {
-//!        Box::pin(async move {
-//!            // In this case, we are trying to "connect" a file that should exist on the system
-//!            Ok(File::open(path).await?)
-//!        })
-//!    }
+//! impl UnderlyingIo<PathBuf> for File {
+//!     // Implementing the creation function that will be used to establish an io connection.
+//!     // Additionally, this will be used when reconnect tries are attempted.
+//!     fn create(path: PathBuf) -> Pin<Box<dyn Future<Output = Result<Self, Box<dyn Error>>>>> {
+//!         Box::pin(async move {
+//!             // In this case, we are trying to "connect" a file that
+//!             // should exist on the system
+//!             Ok(File::open(path).await?)
+//!         })
+//!     }
 //! }
+//!
 //! // Because StubbornIo implements deref, you are able to invoke
 //! // the original methods on the File struct.
 //! type HomemadeStubbornFile = StubbornIo<File, PathBuf>;
