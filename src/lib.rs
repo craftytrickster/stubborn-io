@@ -69,9 +69,9 @@ pub use self::tokio::StubbornTcpStream;
 #[test]
 fn test_compilation_for_doc_example() {
     use self::tokio::{StubbornIo, UnderlyingIo};
-    use std::io;
     use ::tokio::fs::File;
     use std::future::Future;
+    use std::io;
     use std::path::PathBuf;
     use std::pin::Pin;
 
