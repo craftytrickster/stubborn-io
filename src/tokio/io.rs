@@ -2,7 +2,6 @@ use crate::config::ReconnectOptions;
 use bytes::{Buf, BufMut};
 use log::{error, info};
 use std::borrow::Borrow;
-use std::error::Error;
 use std::future::Future;
 use std::io;
 use std::marker::PhantomData;
@@ -21,7 +20,7 @@ where
 {
     /// The creation function is used by StubbornIo in order to establish both the initial IO connection
     /// in addition to performing reconnects.
-    fn create(ctor_arg: C) -> Pin<Box<dyn Future<Output = Result<Self, Box<dyn Error>>>>>;
+    fn establish(ctor_arg: C) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>>;
 
     /// When IO items experience an [io::Error](io::Error) during operation, it does not necessarily mean
     /// it is a disconnect/termination (ex: WouldBlock). This trait provides sensible defaults to classify
@@ -52,7 +51,7 @@ struct AttemptsTracker {
 
 struct ReconnectStatus<T, C> {
     attempts_tracker: AttemptsTracker,
-    reconnect_attempt: Pin<Box<dyn Future<Output = Result<T, Box<dyn std::error::Error>>>>>,
+    reconnect_attempt: Pin<Box<dyn Future<Output = io::Result<T>>>>,
     _phantom_data: PhantomData<C>,
 }
 
@@ -74,7 +73,7 @@ where
 }
 
 /// The StubbornIo is a wrapper over a tokio AsyncRead/AsyncWrite item that will automatically
-/// invoke the [UnderlyingIo::create] upon initialization and when a reconnect is needed.
+/// invoke the [UnderlyingIo::establish] upon initialization and when a reconnect is needed.
 /// Because it implements deref, you are able to invoke all of the original methods on the wrapped IO.
 pub struct StubbornIo<T, C> {
     status: Status<T, C>,
@@ -118,7 +117,7 @@ where
 {
     /// Connects or creates a handle to the UnderlyingIo item,
     /// using the default reconnect options.
-    pub async fn connect(ctor_arg: impl Borrow<C>) -> Result<Self, Box<dyn Error>> {
+    pub async fn connect(ctor_arg: impl Borrow<C>) -> io::Result<Self> {
         let options = ReconnectOptions::new();
         Self::connect_with_options(ctor_arg, options).await
     }
@@ -126,10 +125,10 @@ where
     pub async fn connect_with_options(
         ctor_arg: impl Borrow<C>,
         options: ReconnectOptions,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> io::Result<Self> {
         let ctor_arg = ctor_arg.borrow().clone();
 
-        let tcp = match T::create(ctor_arg.clone()).await {
+        let tcp = match T::establish(ctor_arg.clone()).await {
             Ok(tcp) => {
                 info!("Initial connection succeeded.");
                 (options.on_connect_callback)();
@@ -158,7 +157,7 @@ where
 
                     info!("Attempting reconnect #{} now.", reconnect_num);
 
-                    match T::create(ctor_arg.clone()).await {
+                    match T::establish(ctor_arg.clone()).await {
                         Ok(tcp) => {
                             result = Ok(tcp);
                             (options.on_connect_callback)();
@@ -228,7 +227,7 @@ where
             let reconnect_attempt = async move {
                 future_instant.await;
                 info!("Attempting reconnect #{} now.", cur_num);
-                T::create(ctor_arg).await
+                T::establish(ctor_arg).await
             };
 
             reconnect_status.reconnect_attempt = Box::pin(reconnect_attempt);

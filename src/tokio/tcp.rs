@@ -1,13 +1,13 @@
 use super::io::{StubbornIo, UnderlyingIo};
-use std::error::Error;
+use std::io;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use tokio::net::TcpStream;
 
 impl UnderlyingIo<SocketAddr> for TcpStream {
-    fn create(addr: SocketAddr) -> Pin<Box<dyn Future<Output = Result<Self, Box<dyn Error>>>>> {
-        Box::pin(async move { Ok(TcpStream::connect(&addr).await?) })
+    fn establish(addr: SocketAddr) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
+        Box::pin(TcpStream::connect(&addr))
     }
 }
 

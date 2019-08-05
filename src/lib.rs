@@ -25,7 +25,7 @@
 //! ``` ignore
 //! #![feature(async_await)]
 //!
-//! use std::error::Error;
+//! use std::io;
 //! use std::future::Future;
 //! use std::path::PathBuf;
 //! use std::pin::Pin;
@@ -33,9 +33,9 @@
 //! use tokio::fs::File;
 //!
 //! impl UnderlyingIo<PathBuf> for File {
-//!     // Implementing the creation function that will be used to establish an io connection.
+//!     // Establishes an io connection.
 //!     // Additionally, this will be used when reconnect tries are attempted.
-//!     fn create(path: PathBuf) -> Pin<Box<dyn Future<Output = Result<Self, Box<dyn Error>>>>> {
+//!     fn establish(path: PathBuf) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
 //!         Box::pin(async move {
 //!             // In this case, we are trying to "connect" a file that
 //!             // should exist on the system
@@ -69,15 +69,15 @@ pub use self::tokio::StubbornTcpStream;
 #[test]
 fn test_compilation_for_doc_example() {
     use self::tokio::{StubbornIo, UnderlyingIo};
+    use std::io;
     use ::tokio::fs::File;
-    use std::error::Error;
     use std::future::Future;
     use std::path::PathBuf;
     use std::pin::Pin;
 
     impl UnderlyingIo<PathBuf> for File {
         // Implementing the creation function that will be used to establish an io connection.
-        fn create(path: PathBuf) -> Pin<Box<dyn Future<Output = Result<Self, Box<dyn Error>>>>> {
+        fn establish(path: PathBuf) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
             Box::pin(async move { Ok(File::open(path).await?) })
         }
     }
