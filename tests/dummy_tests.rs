@@ -5,6 +5,7 @@ use std::future::Future;
 use std::io;
 use std::io::{Cursor, Write};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::task::{Context, Poll};
@@ -149,12 +150,19 @@ pub mod instantiating {
             ..DummyCtor::default()
         };
 
+        let disconnect_counter = Arc::new(AtomicU8::new(0));
+        let disconnect_clone = disconnect_counter.clone();
+
         let options = ReconnectOptions::new()
             .with_retries_generator(|| vec![Duration::from_millis(100)])
-            .with_exit_if_first_connect_fails(false);
+            .with_exit_if_first_connect_fails(false)
+            .with_on_connect_fail_callback(move || {
+                disconnect_clone.fetch_add(1, Ordering::Relaxed);
+            });
 
         let dummy = StubbornDummy::connect_with_options(ctor, options).await;
 
+        assert_eq!(disconnect_counter.load(Ordering::Relaxed), 2);
         assert!(dummy.is_err());
     }
 
@@ -166,12 +174,19 @@ pub mod instantiating {
             ..DummyCtor::default()
         };
 
+        let disconnect_counter = Arc::new(AtomicU8::new(0));
+        let disconnect_clone = disconnect_counter.clone();
+
         let options = ReconnectOptions::new()
             .with_exit_if_first_connect_fails(false)
-            .with_retries_generator(|| vec![Duration::from_millis(100)]);
+            .with_retries_generator(|| vec![Duration::from_millis(100)])
+            .with_on_connect_fail_callback(move || {
+                disconnect_clone.fetch_add(1, Ordering::Relaxed);
+            });
 
         let dummy = StubbornDummy::connect_with_options(ctor, options).await;
 
+        assert_eq!(disconnect_counter.load(Ordering::Relaxed), 1);
         assert!(dummy.is_ok());
     }
 }
@@ -181,7 +196,6 @@ mod already_connected {
     use super::*;
     use futures::stream::StreamExt;
 
-    use std::sync::atomic::{AtomicU8, Ordering};
     use tokio::codec::{Framed, LinesCodec};
 
     #[tokio::test]
