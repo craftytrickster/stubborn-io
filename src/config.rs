@@ -26,13 +26,13 @@ pub struct ReconnectOptions {
 }
 
 impl ReconnectOptions {
-    /// By default, the stubborn-io will try to reconnect even if the first connect attempt fails.
+    /// By default, the stubborn-io will not try to reconnect if the first connect attempt fails.
     /// By default, the retries iterator waits longer and longer between reconnection attempts,
     /// until it eventually perpetually tries to reconnect every 30 minutes.
     pub fn new() -> Self {
         ReconnectOptions {
             retries_to_attempt_fn: Box::new(get_standard_reconnect_strategy),
-            exit_if_first_connect_fails: false,
+            exit_if_first_connect_fails: true,
             on_connect_callback: Box::new(|| {}),
             on_disconnect_callback: Box::new(|| {}),
             on_connect_fail_callback: Box::new(|| {}),

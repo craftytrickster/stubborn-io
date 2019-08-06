@@ -15,8 +15,6 @@ use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
 
 #[derive(Default)]
 pub struct DummyIo {
-    poll_write_results: Vec<Poll<io::Result<usize>>>,
-    poll_flush_results: Vec<Poll<io::Result<()>>>,
     poll_read_results: Arc<Mutex<Vec<(Poll<io::Result<usize>>, Vec<u8>)>>>,
 }
 
@@ -50,15 +48,15 @@ type StubbornDummy = StubbornIo<DummyIo, DummyCtor>;
 
 impl AsyncWrite for DummyIo {
     fn poll_write(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
         _buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        self.poll_write_results.remove(0)
+        unreachable!();
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        self.poll_flush_results.remove(0)
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        unreachable!();
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
@@ -138,8 +136,7 @@ pub mod instantiating {
             ..DummyCtor::default()
         };
 
-        let options = ReconnectOptions::new().with_exit_if_first_connect_fails(true);
-        let dummy = StubbornDummy::connect_with_options(ctor.clone(), options).await;
+        let dummy = StubbornDummy::connect(ctor).await;
 
         assert!(dummy.is_err());
     }
@@ -152,8 +149,10 @@ pub mod instantiating {
             ..DummyCtor::default()
         };
 
-        let options =
-            ReconnectOptions::new().with_retries_generator(|| vec![Duration::from_millis(100)]);
+        let options = ReconnectOptions::new()
+            .with_retries_generator(|| vec![Duration::from_millis(100)])
+            .with_exit_if_first_connect_fails(false);
+
         let dummy = StubbornDummy::connect_with_options(ctor, options).await;
 
         assert!(dummy.is_err());
@@ -167,8 +166,10 @@ pub mod instantiating {
             ..DummyCtor::default()
         };
 
-        let options =
-            ReconnectOptions::new().with_retries_generator(|| vec![Duration::from_millis(100)]);
+        let options = ReconnectOptions::new()
+            .with_exit_if_first_connect_fails(false)
+            .with_retries_generator(|| vec![Duration::from_millis(100)]);
+
         let dummy = StubbornDummy::connect_with_options(ctor, options).await;
 
         assert!(dummy.is_ok());

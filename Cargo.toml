@@ -6,6 +6,7 @@ edition = "2018"
 description = "io traits/structs that automatically recover from potential disconnections/interruptions."
 license = "MIT"
 keywords = ["reconnect", "persistent", "retry", "stubborn", "io", "StubbornTcpStream"]
+repository = "https://github.com/craftytrickster/stubborn-io"
  
 [dependencies]
 tokio = { git = "https://github.com/tokio-rs/tokio", features = ["rt-full"] }

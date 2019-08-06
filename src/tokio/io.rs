@@ -16,7 +16,7 @@ use tokio::timer::Delay;
 /// item to enable it to work with the [StubbornIo] struct.
 pub trait UnderlyingIo<C>: Sized + Unpin
 where
-    C: Clone + Unpin,
+    C: Clone + Send + Unpin,
 {
     /// The creation function is used by StubbornIo in order to establish both the initial IO connection
     /// in addition to performing reconnects.
@@ -46,19 +46,19 @@ where
 
 struct AttemptsTracker {
     attempt_num: usize,
-    retries_remaining: Box<dyn Iterator<Item = Duration>>,
+    retries_remaining: Box<dyn Iterator<Item = Duration> + Send>,
 }
 
 struct ReconnectStatus<T, C> {
     attempts_tracker: AttemptsTracker,
-    reconnect_attempt: Pin<Box<dyn Future<Output = io::Result<T>>>>,
+    reconnect_attempt: Pin<Box<dyn Future<Output = io::Result<T>> + Send>>,
     _phantom_data: PhantomData<C>,
 }
 
 impl<T, C> ReconnectStatus<T, C>
 where
     T: UnderlyingIo<C>,
-    C: Clone + Unpin + 'static,
+    C: Clone + Send + Unpin + 'static,
 {
     pub fn new(options: &ReconnectOptions) -> Self {
         ReconnectStatus {
@@ -113,7 +113,7 @@ impl<T, C> DerefMut for StubbornIo<T, C> {
 impl<T, C> StubbornIo<T, C>
 where
     T: UnderlyingIo<C>,
-    C: Clone + Unpin + 'static,
+    C: Clone + Send + Unpin + 'static,
 {
     /// Connects or creates a handle to the UnderlyingIo item,
     /// using the default reconnect options.
@@ -286,7 +286,7 @@ where
 impl<T, C> AsyncRead for StubbornIo<T, C>
 where
     T: UnderlyingIo<C> + AsyncRead,
-    C: Clone + Unpin + 'static,
+    C: Clone + Send + Unpin + 'static,
 {
     unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [u8]) -> bool {
         match &self.status {
@@ -348,7 +348,7 @@ where
 impl<T, C> AsyncWrite for StubbornIo<T, C>
 where
     T: UnderlyingIo<C> + AsyncWrite,
-    C: Clone + Unpin + 'static,
+    C: Clone + Send + Unpin + 'static,
 {
     fn poll_write(
         mut self: Pin<&mut Self>,
