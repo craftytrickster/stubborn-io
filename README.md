@@ -10,7 +10,7 @@ This crate provides io traits/structs that automatically recover from potential 
 To use with your project, add the following to your Cargo.toml:
 
 ```toml
-stubborn-io = { git = "https://github.com/craftytrickster/stubborn-io" }
+stubborn-io = "*"
 ```
 
 API Documentation, examples and motivations can be found here -
