@@ -5,7 +5,7 @@ authors = ["David Raifaizen <d-raif@outlook.com>"]
 edition = "2018"
 description = "io traits/structs that automatically recover from potential disconnections/interruptions."
 license = "MIT"
-keywords = ["reconnect", "persistent", "retry", "stubborn", "io", "StubbornTcpStream"]
+keywords = ["reconnect", "retry", "stubborn", "io", "StubbornTcpStream"]
 repository = "https://github.com/craftytrickster/stubborn-io"
  
 [dependencies]
