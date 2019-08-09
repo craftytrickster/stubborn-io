@@ -9,7 +9,7 @@ keywords = ["reconnect", "persistent", "retry", "stubborn", "io", "StubbornTcpSt
 repository = "https://github.com/craftytrickster/stubborn-io"
  
 [dependencies]
-tokio = { git = "https://github.com/tokio-rs/tokio", features = ["rt-full"] }
+tokio = "=0.2.0-alpha.1"
 futures-preview = { version = "=0.3.0-alpha.17", features = ["async-await", "nightly"] }
 bytes = "0.4"
 mio = "0.6"

@@ -13,7 +13,5 @@ To use with your project, add the following to your Cargo.toml:
 stubborn-io = { git = "https://github.com/craftytrickster/stubborn-io" }
 ```
 
-*The following will be true once tokio is stabilized:*
-
-*API Documentation, examples and motivations can be found here -
-https://docs.rs/stubborn-io/0.1.1/stubborn-io/ .*
+API Documentation, examples and motivations can be found here -
+https://docs.rs/stubborn-io .
