@@ -2,7 +2,7 @@ stubborn-io
 ===========
 
 *Note: This is a nightly only crate until the
-official async/await release in Rust 1.38.*
+official async/await release in Rust 1.39.*
 
 This crate provides io traits/structs that automatically recover from potential disconnections/interruptions.
 

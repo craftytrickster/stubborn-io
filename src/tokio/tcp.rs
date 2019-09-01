@@ -7,7 +7,7 @@ use tokio::net::TcpStream;
 
 impl UnderlyingIo<SocketAddr> for TcpStream {
     fn establish(addr: SocketAddr) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
-        Box::pin(TcpStream::connect(&addr))
+        Box::pin(TcpStream::connect(addr))
     }
 }
 

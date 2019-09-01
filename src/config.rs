@@ -29,6 +29,7 @@ impl ReconnectOptions {
     /// By default, the stubborn-io will not try to reconnect if the first connect attempt fails.
     /// By default, the retries iterator waits longer and longer between reconnection attempts,
     /// until it eventually perpetually tries to reconnect every 30 minutes.
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         ReconnectOptions {
             retries_to_attempt_fn: Box::new(get_standard_reconnect_strategy),
@@ -106,7 +107,7 @@ fn get_standard_reconnect_strategy() -> DurationIterator {
 
     let repeat = std::iter::repeat(Duration::from_secs(60 * 30));
 
-    let forever_iterator = initial_attempts.into_iter().chain(repeat.into_iter());
+    let forever_iterator = initial_attempts.into_iter().chain(repeat);
 
     Box::new(forever_iterator)
 }

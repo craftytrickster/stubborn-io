@@ -10,7 +10,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
-use tokio::timer::Delay;
+use tokio::timer::delay;
 
 /// Trait that should be implemented for an [AsyncRead] and/or [AsyncWrite]
 /// item to enable it to work with the [StubbornIo] struct.
@@ -153,7 +153,7 @@ where
                         reconnect_num, duration
                     );
 
-                    Delay::new(Instant::now().add(duration)).await;
+                    delay(Instant::now().add(duration)).await;
 
                     info!("Attempting reconnect #{} now.", reconnect_num);
 
@@ -219,7 +219,7 @@ where
                 }
             };
 
-            let future_instant = Delay::new(Instant::now().add(next_duration));
+            let future_instant = delay(Instant::now().add(next_duration));
 
             reconnect_status.attempts_tracker.attempt_num += 1;
             let cur_num = reconnect_status.attempts_tracker.attempt_num;

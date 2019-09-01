@@ -1,5 +1,3 @@
-#![feature(async_await)]
-
 use bytes::{Buf, BufMut};
 use std::future::Future;
 use std::io;
