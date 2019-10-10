@@ -1,6 +1,6 @@
 [package]
 name = "stubborn-io"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["David Raifaizen <d-raif@outlook.com>"]
 edition = "2018"
 description = "io traits/structs that automatically recover from potential disconnections/interruptions."
@@ -11,8 +11,8 @@ documentation = "https://docs.rs/stubborn-io"
 readme = "README.md"
  
 [dependencies]
-tokio = "=0.2.0-alpha.4"
-futures-preview = { version = "=0.3.0-alpha.18", features = ["async-await", "nightly"] }
+tokio = "=0.2.0-alpha.6"
+futures-preview = { version = "=0.3.0-alpha.19", features = ["async-await", "unstable"] }
 bytes = "0.4"
 mio = "0.6"
 log = "0.4"
