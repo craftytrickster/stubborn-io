@@ -11,8 +11,8 @@ documentation = "https://docs.rs/stubborn-io"
 readme = "README.md"
  
 [dependencies]
-tokio = "=0.2.0-alpha.4"
-futures-preview = { version = "=0.3.0-alpha.18", features = ["async-await", "nightly"] }
+tokio = { git = "https://github.com/tokio-rs/tokio.git", branch = "master" }
+futures-preview = { version = "=0.3.0-alpha.19", features = ["async-await"] }
 bytes = "0.4"
 mio = "0.6"
 log = "0.4"
