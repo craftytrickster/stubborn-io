@@ -194,7 +194,7 @@ mod already_connected {
     use super::*;
     use futures::stream::StreamExt;
 
-    use tokio::codec::{Framed, LinesCodec};
+    use tokio_util::codec::{Framed, LinesCodec};
 
     #[tokio::test]
     async fn should_ignore_non_fatal_errors_and_continue_as_connected() {
