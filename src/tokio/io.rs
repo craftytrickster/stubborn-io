@@ -10,7 +10,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
-use tokio::timer::delay;
+use tokio::time::delay;
 
 /// Trait that should be implemented for an [AsyncRead] and/or [AsyncWrite]
 /// item to enable it to work with the [StubbornIo] struct.
