@@ -11,6 +11,7 @@ documentation = "https://docs.rs/stubborn-io"
 readme = "README.md"
  
 [dependencies]
+# when tokio hits a official 0.2 non alpha release, will update
 tokio = { git = "https://github.com/tokio-rs/tokio.git", branch = "master" }
 futures = "0.3"
 bytes = "0.4"
