@@ -15,8 +15,6 @@ impl UnderlyingIo<SocketAddr> for TcpStream {
 /// distinction that it will automatically attempt to reconnect in the face of connectivity failures.
 ///
 /// ```
-/// #![feature(async_await)]
-///
 /// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 /// use stubborn_io::StubbornTcpStream;
 ///
