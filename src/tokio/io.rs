@@ -8,9 +8,9 @@ use std::marker::PhantomData;
 use std::ops::{Add, Deref, DerefMut};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
-use tokio::time::delay;
+use tokio::time::{delay, Instant};
 
 /// Trait that should be implemented for an [AsyncRead] and/or [AsyncWrite]
 /// item to enable it to work with the [StubbornIo] struct.
