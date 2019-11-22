@@ -5,6 +5,7 @@ use std::borrow::Borrow;
 use std::future::Future;
 use std::io;
 use std::marker::PhantomData;
+use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -288,7 +289,7 @@ where
     T: UnderlyingIo<C> + AsyncRead,
     C: Clone + Send + Unpin + 'static,
 {
-    unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [u8]) -> bool {
+    unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [MaybeUninit<u8>]) -> bool {
         match &self.status {
             Status::Connected => self.underlying_io.prepare_uninitialized_buffer(buf),
             Status::Disconnected(_) => false,

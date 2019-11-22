@@ -14,7 +14,7 @@ readme = "README.md"
 # when tokio hits a official 0.2 non alpha release, will update
 tokio = { git = "https://github.com/tokio-rs/tokio.git", branch = "master" }
 futures = "0.3"
-bytes = "0.4"
+bytes = { git = "https://github.com/tokio-rs/bytes" }
 mio = "0.6"
 log = "0.4"
 
