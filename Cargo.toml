@@ -12,12 +12,12 @@ readme = "README.md"
  
 [dependencies]
 # when tokio hits a official 0.2 non alpha release, will update
-tokio = { git = "https://github.com/tokio-rs/tokio.git", branch = "master", features = ["time", "tcp", "io-util"] }
+tokio = { version = "0.2", features = ["time", "tcp", "io-util"] }
 futures = "0.3"
-bytes = { git = "https://github.com/tokio-rs/bytes" }
+bytes = "0.5"
 mio = "0.6"
 log = "0.4"
 
 [dev-dependencies]
-tokio = { git = "https://github.com/tokio-rs/tokio.git", branch = "master", features = ["macros", "rt-core", "fs"] }
-tokio-util = { git = "https://github.com/tokio-rs/tokio.git", branch = "master", features = ["codec"] }
+tokio = { version = "0.2", features = ["macros", "rt-core", "fs"] }
+tokio-util = { version = "0.2", features = ["codec"] }
