@@ -2,6 +2,7 @@ use bytes::{Buf, BufMut};
 use std::future::Future;
 use std::io;
 use std::io::{Cursor, Write};
+use std::mem::MaybeUninit;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
@@ -72,7 +73,7 @@ impl AsyncWrite for DummyIo {
 }
 
 impl AsyncRead for DummyIo {
-    unsafe fn prepare_uninitialized_buffer(&self, _buf: &mut [u8]) -> bool {
+    unsafe fn prepare_uninitialized_buffer(&self, _buf: &mut [MaybeUninit<u8>]) -> bool {
         true
     }
 

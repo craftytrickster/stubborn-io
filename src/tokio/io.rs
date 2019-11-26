@@ -5,12 +5,13 @@ use std::borrow::Borrow;
 use std::future::Future;
 use std::io;
 use std::marker::PhantomData;
-use std::ops::{Add, Deref, DerefMut};
+use std::mem::MaybeUninit;
+use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
-use tokio::time::delay;
+use tokio::time::delay_for;
 
 /// Trait that should be implemented for an [AsyncRead] and/or [AsyncWrite]
 /// item to enable it to work with the [StubbornIo] struct.
@@ -153,7 +154,7 @@ where
                         reconnect_num, duration
                     );
 
-                    delay(Instant::now().add(duration)).await;
+                    delay_for(duration).await;
 
                     info!("Attempting reconnect #{} now.", reconnect_num);
 
@@ -219,7 +220,7 @@ where
                 }
             };
 
-            let future_instant = delay(Instant::now().add(next_duration));
+            let future_instant = delay_for(next_duration);
 
             reconnect_status.attempts_tracker.attempt_num += 1;
             let cur_num = reconnect_status.attempts_tracker.attempt_num;
@@ -288,7 +289,7 @@ where
     T: UnderlyingIo<C> + AsyncRead,
     C: Clone + Send + Unpin + 'static,
 {
-    unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [u8]) -> bool {
+    unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [MaybeUninit<u8>]) -> bool {
         match &self.status {
             Status::Connected => self.underlying_io.prepare_uninitialized_buffer(buf),
             Status::Disconnected(_) => false,
