@@ -12,6 +12,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          
       - name: Format check
         run: cargo fmt  -- --check
       - name: Build and Lint
