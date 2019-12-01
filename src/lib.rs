@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 //! Contains the ingredients needed to create wrappers over tokio AsyncRead/AsyncWrite items
 //! to automatically reconnect upon failures. This is done so that a user can use them without worrying
 //! that their application logic will terminate simply due to an event like a temporary network failure.
