@@ -12,7 +12,6 @@ readme = "README.md"
  
 [dependencies]
 tokio = { version = "0.2", features = ["time", "tcp", "io-util"] }
-futures = "0.3"
 bytes = "0.5"
 mio = "0.6"
 log = "0.4"
@@ -20,3 +19,4 @@ log = "0.4"
 [dev-dependencies]
 tokio = { version = "0.2", features = ["macros", "rt-core", "fs"] }
 tokio-util = { version = "0.2", features = ["codec"] }
+futures = "0.3"
