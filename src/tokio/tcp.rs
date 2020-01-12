@@ -3,10 +3,11 @@ use std::future::Future;
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, ToSocketAddrs};
 
-impl UnderlyingIo<SocketAddr> for TcpStream {
-    fn establish(addr: SocketAddr) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
+impl<A> UnderlyingIo<A> for TcpStream
+    where A: ToSocketAddrs + Sync + Send + Clone + Unpin + 'static {
+    fn establish(addr: A) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
         Box::pin(TcpStream::connect(addr))
     }
 }
@@ -18,10 +19,10 @@ impl UnderlyingIo<SocketAddr> for TcpStream {
 /// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 /// use stubborn_io::StubbornTcpStream;
 ///
-/// let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+/// let addr = "localhost:8080";
 /// async {
-///     let tcp_stream = StubbornTcpStream::connect(&addr).await.unwrap();
+///     let tcp_stream = StubbornTcpStream::<&str>::connect(addr).await.unwrap();
 ///     let regular_tokio_tcp_function_result = tcp_stream.peer_addr();
 /// };
 /// ```
-pub type StubbornTcpStream = StubbornIo<TcpStream, SocketAddr>;
+pub type StubbornTcpStream<A> = StubbornIo<TcpStream, A>;
