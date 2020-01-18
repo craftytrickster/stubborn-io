@@ -21,7 +21,6 @@ In this example, we will see a drop in replacement for tokio's TcpStream, with t
 distinction that it will automatically attempt to reconnect in the face of connectivity failures.
 
 ```rust
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use stubborn_io::StubbornTcpStream;
 
 let addr = "localhost:8080";

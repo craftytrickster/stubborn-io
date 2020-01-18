@@ -1,6 +1,6 @@
 [package]
 name = "stubborn-io"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["David Raifaizen <d-raif@outlook.com>"]
 edition = "2018"
 description = "io traits/structs that automatically recover from potential disconnections/interruptions."
