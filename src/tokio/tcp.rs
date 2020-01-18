@@ -1,7 +1,6 @@
 use super::io::{StubbornIo, UnderlyingIo};
 use std::future::Future;
 use std::io;
-use std::net::SocketAddr;
 use std::pin::Pin;
 use tokio::net::{TcpStream, ToSocketAddrs};
 
@@ -18,7 +17,6 @@ where
 /// distinction that it will automatically attempt to reconnect in the face of connectivity failures.
 ///
 /// ```
-/// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 /// use stubborn_io::StubbornTcpStream;
 ///
 /// let addr = "localhost:8080";

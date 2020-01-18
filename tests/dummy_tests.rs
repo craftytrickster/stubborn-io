@@ -15,16 +15,18 @@ use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
 
 #[derive(Default)]
 pub struct DummyIo {
-    poll_read_results: Arc<Mutex<Vec<(Poll<io::Result<usize>>, Vec<u8>)>>>,
+    poll_read_results: PollReadResults,
 }
 
 #[derive(Default, Clone)]
 struct DummyCtor {
     connect_outcomes: ConnectOutcomes,
-    poll_read_results: Arc<Mutex<Vec<(Poll<io::Result<usize>>, Vec<u8>)>>>,
+    poll_read_results: PollReadResults,
 }
 
 type ConnectOutcomes = Arc<Mutex<Vec<bool>>>;
+
+type PollReadResults = Arc<Mutex<Vec<(Poll<io::Result<usize>>, Vec<u8>)>>>;
 
 impl UnderlyingIo<DummyCtor> for DummyIo {
     fn establish(ctor: DummyCtor) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
@@ -34,7 +36,6 @@ impl UnderlyingIo<DummyCtor> for DummyIo {
         if should_succeed {
             let dummy_io = DummyIo {
                 poll_read_results: ctor.poll_read_results.clone(),
-                ..DummyIo::default()
             };
 
             Box::pin(async { Ok(dummy_io) })
