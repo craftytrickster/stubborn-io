@@ -6,7 +6,9 @@ use std::pin::Pin;
 use tokio::net::{TcpStream, ToSocketAddrs};
 
 impl<A> UnderlyingIo<A> for TcpStream
-    where A: ToSocketAddrs + Sync + Send + Clone + Unpin + 'static {
+where
+    A: ToSocketAddrs + Sync + Send + Clone + Unpin + 'static,
+{
     fn establish(addr: A) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
         Box::pin(TcpStream::connect(addr))
     }
@@ -21,7 +23,7 @@ impl<A> UnderlyingIo<A> for TcpStream
 ///
 /// let addr = "localhost:8080";
 /// async {
-///     let tcp_stream = StubbornTcpStream::<&str>::connect(addr).await.unwrap();
+///     let tcp_stream = StubbornTcpStream::connect(addr).await.unwrap();
 ///     let regular_tokio_tcp_function_result = tcp_stream.peer_addr();
 /// };
 /// ```
