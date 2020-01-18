@@ -24,14 +24,12 @@ distinction that it will automatically attempt to reconnect in the face of conne
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use stubborn_io::StubbornTcpStream;
 
-let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-
+let addr = "localhost:8080";
 async {
     // we are connecting to the TcpStream using the default built in options.
     // these can also be customized (for example, the amount of reconnect attempts,
     // wait duration, etc) using the connect_with_options method.
-    let tcp_stream = StubbornTcpStream::connect(&addr).await.unwrap();
-
+    let tcp_stream = StubbornTcpStream::connect(addr).await.unwrap();
     // once we acquire the wrapped IO, in this case, a TcpStream, we can
     // call all of the regular methods on it, as seen below
     let regular_tokio_tcp_function_result = tcp_stream.peer_addr();

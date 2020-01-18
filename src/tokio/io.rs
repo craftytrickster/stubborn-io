@@ -118,7 +118,7 @@ where
 {
     /// Connects or creates a handle to the UnderlyingIo item,
     /// using the default reconnect options.
-    pub async fn connect(ctor_arg: impl Borrow<C>) -> io::Result<Self> {
+    pub async fn connect(ctor_arg: C) -> io::Result<Self> {
         let options = ReconnectOptions::new();
         Self::connect_with_options(ctor_arg, options).await
     }
