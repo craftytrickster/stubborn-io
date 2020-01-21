@@ -1,7 +1,6 @@
 use crate::config::ReconnectOptions;
 use bytes::{Buf, BufMut};
 use log::{error, info};
-use std::borrow::Borrow;
 use std::future::Future;
 use std::io;
 use std::marker::PhantomData;
@@ -123,12 +122,7 @@ where
         Self::connect_with_options(ctor_arg, options).await
     }
 
-    pub async fn connect_with_options(
-        ctor_arg: impl Borrow<C>,
-        options: ReconnectOptions,
-    ) -> io::Result<Self> {
-        let ctor_arg = ctor_arg.borrow().clone();
-
+    pub async fn connect_with_options(ctor_arg: C, options: ReconnectOptions) -> io::Result<Self> {
         let tcp = match T::establish(ctor_arg.clone()).await {
             Ok(tcp) => {
                 info!("Initial connection succeeded.");
