@@ -22,8 +22,10 @@ distinction that it will automatically attempt to reconnect in the face of conne
 
 ```rust
 use stubborn_io::StubbornTcpStream;
+use tokio::io::AsyncWriteExt;
 
 let addr = "localhost:8080";
+
 async {
     // we are connecting to the TcpStream using the default built in options.
     // these can also be customized (for example, the amount of reconnect attempts,
@@ -31,7 +33,7 @@ async {
     let tcp_stream = StubbornTcpStream::connect(addr).await.unwrap();
     // once we acquire the wrapped IO, in this case, a TcpStream, we can
     // call all of the regular methods on it, as seen below
-    let regular_tokio_tcp_function_result = tcp_stream.peer_addr();
+    tcp_stream.write_all(b"hello world!").await.unwrap();
 };
 ```
 
