@@ -18,11 +18,13 @@ where
 ///
 /// ```
 /// use stubborn_io::StubbornTcpStream;
+/// use tokio::io::AsyncWriteExt;
 ///
 /// let addr = "localhost:8080";
+///
 /// async {
-///     let tcp_stream = StubbornTcpStream::connect(addr).await.unwrap();
-///     let regular_tokio_tcp_function_result = tcp_stream.peer_addr();
+///     let mut tcp_stream = StubbornTcpStream::connect(addr).await.unwrap();
+///     tcp_stream.write_all(b"hello world!").await.unwrap();
 /// };
 /// ```
 pub type StubbornTcpStream<A> = StubbornIo<TcpStream, A>;
