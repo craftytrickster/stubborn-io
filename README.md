@@ -30,7 +30,7 @@ async {
     // we are connecting to the TcpStream using the default built in options.
     // these can also be customized (for example, the amount of reconnect attempts,
     // wait duration, etc) using the connect_with_options method.
-    let tcp_stream = StubbornTcpStream::connect(addr).await.unwrap();
+    let mut tcp_stream = StubbornTcpStream::connect(addr).await.unwrap();
     // once we acquire the wrapped IO, in this case, a TcpStream, we can
     // call all of the regular methods on it, as seen below
     tcp_stream.write_all(b"hello world!").await.unwrap();
