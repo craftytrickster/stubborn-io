@@ -1,7 +1,6 @@
 use bytes::{Buf, BufMut};
 use std::future::Future;
-use std::io;
-use std::io::{Cursor, Write};
+use std::io::{self, Cursor, ErrorKind, Write};
 use std::mem::MaybeUninit;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -11,7 +10,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use stubborn_io::tokio::{StubbornIo, UnderlyingIo};
 use stubborn_io::ReconnectOptions;
-use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 #[derive(Default)]
 pub struct DummyIo {

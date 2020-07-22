@@ -2,14 +2,14 @@ use crate::config::ReconnectOptions;
 use bytes::{Buf, BufMut};
 use log::{error, info};
 use std::future::Future;
-use std::io;
+use std::io::{self, ErrorKind};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncWrite, ErrorKind};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::time::delay_for;
 
 /// Trait that should be implemented for an [AsyncRead] and/or [AsyncWrite]
