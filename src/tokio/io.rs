@@ -44,8 +44,10 @@ where
     /// If the underlying IO item implements AsyncRead, this method allows the user to specify
     /// if a technically successful read actually means that the connect is closed.
     /// For example, tokio's TcpStream successfully performs a read of 0 bytes when closed.
-    fn is_final_read(&self, remaining_bytes: usize) -> bool {
-        remaining_bytes == 0 // definitely true for tcp, perhaps true for other io as well
+    fn is_final_read(&self, pre_buf_filled: usize, post_buf_filled: usize) -> bool {
+        // definitely true for tcp, perhaps true for other io as well,
+        // indicative of EOF hit
+        pre_buf_filled == post_buf_filled
     }
 }
 
@@ -270,10 +272,11 @@ where
     fn is_read_disconnect_detected(
         &self,
         poll_result: &Poll<io::Result<()>>,
-        remaining_bytes: usize,
+        pre_read_filled: usize,
+        post_read_filled: usize,
     ) -> bool {
         match poll_result {
-            Poll::Ready(Ok(())) if self.is_final_read(remaining_bytes) => true,
+            Poll::Ready(Ok(())) if self.is_final_read(pre_read_filled, post_read_filled) => true,
             Poll::Ready(Err(err)) => self.is_disconnect_error(err),
             _ => false,
         }
@@ -299,9 +302,10 @@ where
     ) -> Poll<io::Result<()>> {
         match &mut self.status {
             Status::Connected => {
+                let pre_len = buf.filled().len();
                 let poll = AsyncRead::poll_read(Pin::new(&mut self.underlying_io), cx, buf);
-
-                if self.is_read_disconnect_detected(&poll, buf.remaining()) {
+                let post_len = buf.filled().len();
+                if self.is_read_disconnect_detected(&poll, pre_len, post_len) {
                     self.on_disconnect(cx);
                     Poll::Pending
                 } else {
