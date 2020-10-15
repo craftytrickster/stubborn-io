@@ -1,7 +1,5 @@
-use bytes::{Buf, BufMut};
 use std::future::Future;
-use std::io::{self, Cursor, ErrorKind, Write};
-use std::mem::MaybeUninit;
+use std::io::{self, ErrorKind};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
@@ -10,7 +8,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use stubborn_io::tokio::{StubbornIo, UnderlyingIo};
 use stubborn_io::ReconnectOptions;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 #[derive(Default)]
 pub struct DummyIo {
@@ -25,7 +23,7 @@ struct DummyCtor {
 
 type ConnectOutcomes = Arc<Mutex<Vec<bool>>>;
 
-type PollReadResults = Arc<Mutex<Vec<(Poll<io::Result<usize>>, Vec<u8>)>>>;
+type PollReadResults = Arc<Mutex<Vec<(Poll<io::Result<()>>, Vec<u8>)>>>;
 
 impl UnderlyingIo<DummyCtor> for DummyIo {
     fn establish(ctor: DummyCtor) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
@@ -62,26 +60,14 @@ impl AsyncWrite for DummyIo {
     fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
-
-    fn poll_write_buf<B: Buf>(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-        _buf: &mut B,
-    ) -> Poll<io::Result<usize>> {
-        Poll::Pending
-    }
 }
 
 impl AsyncRead for DummyIo {
-    unsafe fn prepare_uninitialized_buffer(&self, _buf: &mut [MaybeUninit<u8>]) -> bool {
-        true
-    }
-
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<usize>> {
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
         let cloned = self.poll_read_results.clone();
         let mut poll_read_results = cloned.lock().unwrap();
 
@@ -95,18 +81,9 @@ impl AsyncRead for DummyIo {
                 Poll::Ready(Err(e))
             }
         } else {
-            let mut cursor = Cursor::new(buf);
-            let _ = cursor.write_all(&bytes);
+            let _ = buf.put_slice(&bytes);
             result
         }
-    }
-
-    fn poll_read_buf<B: BufMut>(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-        _buf: &mut B,
-    ) -> Poll<io::Result<usize>> {
-        Poll::Pending
     }
 }
 
@@ -209,8 +186,8 @@ mod already_connected {
                 ))),
                 vec![],
             ),
-            (Poll::Ready(Ok(6)), b"yother".to_vec()),
-            (Poll::Ready(Ok(2)), b"e\n".to_vec()),
+            (Poll::Ready(Ok(())), b"yother".to_vec()),
+            (Poll::Ready(Ok(())), b"e\n".to_vec()),
         ]));
 
         let ctor = DummyCtor {
@@ -239,7 +216,7 @@ mod already_connected {
                 ))),
                 vec![],
             ),
-            (Poll::Ready(Ok(2)), b"e\n".to_vec()),
+            (Poll::Ready(Ok(())), b"e\n".to_vec()),
         ]));
 
         let ctor = DummyCtor {
@@ -286,7 +263,7 @@ mod already_connected {
                 ))),
                 vec![],
             ),
-            (Poll::Ready(Ok(2)), b"e\n".to_vec()),
+            (Poll::Ready(Ok(())), b"e\n".to_vec()),
         ]));
 
         let ctor = DummyCtor {
