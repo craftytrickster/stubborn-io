@@ -28,12 +28,19 @@ where
     fn is_disconnect_error(&self, err: &io::Error) -> bool {
         use std::io::ErrorKind::*;
 
-        match err.kind() {
-            NotFound | PermissionDenied | ConnectionRefused | ConnectionReset
-            | ConnectionAborted | NotConnected | AddrInUse | AddrNotAvailable | BrokenPipe
-            | AlreadyExists => true,
-            _ => false,
-        }
+        matches!(
+            err.kind(),
+            NotFound
+                | PermissionDenied
+                | ConnectionRefused
+                | ConnectionReset
+                | ConnectionAborted
+                | NotConnected
+                | AddrInUse
+                | AddrNotAvailable
+                | BrokenPipe
+                | AlreadyExists
+        )
     }
 
     /// If the underlying IO item implements AsyncRead, this method allows the user to specify
