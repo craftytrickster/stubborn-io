@@ -1,7 +1,7 @@
 [package]
 name = "stubborn-io"
 version = "0.2.0"
-authors = ["David Raifaizen <d-raif@outlook.com>"]
+authors = ["David Raifaizen <david.raifaizen@protonmail.com>"]
 edition = "2018"
 description = "io traits/structs that automatically recover from potential disconnections/interruptions."
 license = "MIT"
@@ -12,7 +12,6 @@ readme = "README.md"
  
 [dependencies]
 tokio = { version = "0.3", features = ["time", "net"] }
-mio = "0.6"
 log = "0.4"
 
 [dev-dependencies]
