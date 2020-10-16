@@ -19,7 +19,7 @@
 //! seen below.
 //!
 //! ## Example on how a Stubborn IO item might be created
-//! ``` ignore
+//! ```
 //! use std::io;
 //! use std::future::Future;
 //! use std::path::PathBuf;
@@ -27,25 +27,31 @@
 //! use stubborn_io::tokio::{StubbornIo, UnderlyingIo};
 //! use tokio::fs::File;
 //!
-//! impl UnderlyingIo<PathBuf> for File {
+//! struct MyFile(File); // Struct must implement AsyncRead + AsyncWrite
+//!
+//! impl UnderlyingIo<PathBuf> for MyFile {
 //!     // Establishes an io connection.
 //!     // Additionally, this will be used when reconnect tries are attempted.
 //!     fn establish(path: PathBuf) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
 //!         Box::pin(async move {
 //!             // In this case, we are trying to "connect" a file that
 //!             // should exist on the system
-//!             Ok(File::open(path).await?)
+//!             let tokio_file = File::open(path).await?;
+//!             Ok(MyFile(tokio_file))
 //!         })
 //!     }
 //! }
 //!
+//! # async fn test() -> io::Result<()> {
 //! // Because StubbornIo implements deref, you are able to invoke
 //! // the original methods on the File struct.
-//! type HomemadeStubbornFile = StubbornIo<File, PathBuf>;
+//! type HomemadeStubbornFile = StubbornIo<MyFile, PathBuf>;
 //! let path = PathBuf::from("./foo/bar.txt");
 //!
-//! let stubborn_file = HomemadeStubbornFile::connect(&path).await?;
-//! // ... application logic here
+//! let stubborn_file = HomemadeStubbornFile::connect(path).await?;
+//! // ... application logic here!
+//!  # Ok(())
+//!  # }
 //! ```
 
 pub mod config;
@@ -58,25 +64,3 @@ pub mod tokio;
 pub use self::config::ReconnectOptions;
 #[doc(inline)]
 pub use self::tokio::StubbornTcpStream;
-
-// needed because the above doc example can't compile due to the fact that a consumer of this crate
-// does not own the struct for tokio::fs::File.
-#[test]
-fn test_compilation_for_doc_example() {
-    use self::tokio::{StubbornIo, UnderlyingIo};
-    use ::tokio::fs::File;
-    use std::future::Future;
-    use std::io;
-    use std::path::PathBuf;
-    use std::pin::Pin;
-
-    impl UnderlyingIo<PathBuf> for File {
-        // Implementing the creation function that will be used to establish an io connection.
-        fn establish(path: PathBuf) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
-            Box::pin(async move { Ok(File::open(path).await?) })
-        }
-    }
-
-    type HomemadeStubbornFile = StubbornIo<File, PathBuf>;
-    let _ = HomemadeStubbornFile::connect(PathBuf::from("foo"));
-}

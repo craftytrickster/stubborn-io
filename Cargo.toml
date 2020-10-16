@@ -1,7 +1,7 @@
 [package]
 name = "stubborn-io"
-version = "0.1.10"
-authors = ["David Raifaizen <d-raif@outlook.com>"]
+version = "0.2.0"
+authors = ["David Raifaizen <david.raifaizen@protonmail.com>"]
 edition = "2018"
 description = "io traits/structs that automatically recover from potential disconnections/interruptions."
 license = "MIT"
@@ -11,12 +11,10 @@ documentation = "https://docs.rs/stubborn-io"
 readme = "README.md"
  
 [dependencies]
-tokio = { version = "0.2", features = ["time", "tcp", "dns"] }
-bytes = "0.5"
-mio = "0.6"
+tokio = { version = "0.3", features = ["time", "net"] }
 log = "0.4"
 
 [dev-dependencies]
-tokio = { version = "0.2", features = ["macros", "rt-core", "fs"] }
-tokio-util = { version = "0.2", features = ["codec"] }
+tokio = { version = "0.3", features = ["macros", "rt", "fs", "io-util"] }
+tokio-util = { version = "0.4", features = ["codec"] }
 futures = "0.3"

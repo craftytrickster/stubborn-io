@@ -1,16 +1,14 @@
 use crate::config::ReconnectOptions;
-use bytes::{Buf, BufMut};
 use log::{error, info};
 use std::future::Future;
 use std::io::{self, ErrorKind};
 use std::marker::PhantomData;
-use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::time::delay_for;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::time::sleep;
 
 /// Trait that should be implemented for an [AsyncRead] and/or [AsyncWrite]
 /// item to enable it to work with the [StubbornIo] struct.
@@ -28,19 +26,28 @@ where
     fn is_disconnect_error(&self, err: &io::Error) -> bool {
         use std::io::ErrorKind::*;
 
-        match err.kind() {
-            NotFound | PermissionDenied | ConnectionRefused | ConnectionReset
-            | ConnectionAborted | NotConnected | AddrInUse | AddrNotAvailable | BrokenPipe
-            | AlreadyExists => true,
-            _ => false,
-        }
+        matches!(
+            err.kind(),
+            NotFound
+                | PermissionDenied
+                | ConnectionRefused
+                | ConnectionReset
+                | ConnectionAborted
+                | NotConnected
+                | AddrInUse
+                | AddrNotAvailable
+                | BrokenPipe
+                | AlreadyExists
+        )
     }
 
     /// If the underlying IO item implements AsyncRead, this method allows the user to specify
     /// if a technically successful read actually means that the connect is closed.
     /// For example, tokio's TcpStream successfully performs a read of 0 bytes when closed.
-    fn is_final_read(&self, received_bytes: usize) -> bool {
-        received_bytes == 0 // definitely true for tcp, perhaps true for other io as well
+    fn is_final_read(&self, bytes_read: usize) -> bool {
+        // definitely true for tcp, perhaps true for other io as well,
+        // indicative of EOF hit
+        bytes_read == 0
     }
 }
 
@@ -148,7 +155,7 @@ where
                         reconnect_num, duration
                     );
 
-                    delay_for(duration).await;
+                    sleep(duration).await;
 
                     info!("Attempting reconnect #{} now.", reconnect_num);
 
@@ -214,7 +221,7 @@ where
                 }
             };
 
-            let future_instant = delay_for(next_duration);
+            let future_instant = sleep(next_duration);
 
             reconnect_status.attempts_tracker.attempt_num += 1;
             let cur_num = reconnect_status.attempts_tracker.attempt_num;
@@ -262,9 +269,13 @@ where
         }
     }
 
-    fn is_read_disconnect_detected(&self, poll_result: &Poll<io::Result<usize>>) -> bool {
+    fn is_read_disconnect_detected(
+        &self,
+        poll_result: &Poll<io::Result<()>>,
+        bytes_read: usize,
+    ) -> bool {
         match poll_result {
-            Poll::Ready(Ok(size)) if self.is_final_read(*size) => true,
+            Poll::Ready(Ok(())) if self.is_final_read(bytes_read) => true,
             Poll::Ready(Err(err)) => self.is_disconnect_error(err),
             _ => false,
         }
@@ -283,48 +294,18 @@ where
     T: UnderlyingIo<C> + AsyncRead,
     C: Clone + Send + Unpin + 'static,
 {
-    unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [MaybeUninit<u8>]) -> bool {
-        match &self.status {
-            Status::Connected => self.underlying_io.prepare_uninitialized_buffer(buf),
-            Status::Disconnected(_) => false,
-            Status::FailedAndExhausted => false,
-        }
-    }
-
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<usize>> {
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
         match &mut self.status {
             Status::Connected => {
+                let pre_len = buf.filled().len();
                 let poll = AsyncRead::poll_read(Pin::new(&mut self.underlying_io), cx, buf);
-
-                if self.is_read_disconnect_detected(&poll) {
-                    self.on_disconnect(cx);
-                    Poll::Pending
-                } else {
-                    poll
-                }
-            }
-            Status::Disconnected(_) => {
-                self.poll_disconnect(cx);
-                Poll::Pending
-            }
-            Status::FailedAndExhausted => exhausted_err(),
-        }
-    }
-
-    fn poll_read_buf<B: BufMut>(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut B,
-    ) -> Poll<io::Result<usize>> {
-        match &mut self.status {
-            Status::Connected => {
-                let poll = AsyncRead::poll_read_buf(Pin::new(&mut self.underlying_io), cx, buf);
-
-                if self.is_read_disconnect_detected(&poll) {
+                let post_len = buf.filled().len();
+                let bytes_read = post_len - pre_len;
+                if self.is_read_disconnect_detected(&poll, bytes_read) {
                     self.on_disconnect(cx);
                     Poll::Pending
                 } else {
@@ -401,30 +382,6 @@ where
                 poll
             }
             Status::Disconnected(_) => Poll::Pending,
-            Status::FailedAndExhausted => exhausted_err(),
-        }
-    }
-
-    fn poll_write_buf<B: Buf>(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut B,
-    ) -> Poll<io::Result<usize>> {
-        match &mut self.status {
-            Status::Connected => {
-                let poll = AsyncWrite::poll_write_buf(Pin::new(&mut self.underlying_io), cx, buf);
-
-                if self.is_write_disconnect_detected(&poll) {
-                    self.on_disconnect(cx);
-                    Poll::Pending
-                } else {
-                    poll
-                }
-            }
-            Status::Disconnected(_) => {
-                self.poll_disconnect(cx);
-                Poll::Pending
-            }
             Status::FailedAndExhausted => exhausted_err(),
         }
     }
