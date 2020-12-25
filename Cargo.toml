@@ -11,10 +11,10 @@ documentation = "https://docs.rs/stubborn-io"
 readme = "README.md"
  
 [dependencies]
-tokio = { version = "0.3", features = ["time", "net"] }
+tokio = { version = "1", features = ["time", "net"] }
 log = "0.4"
 
 [dev-dependencies]
-tokio = { version = "0.3", features = ["macros", "rt", "fs", "io-util"] }
-tokio-util = { version = "0.4", features = ["codec"] }
+tokio = { version = "1", features = ["macros", "rt", "fs", "io-util"] }
+tokio-util = { version = "0.6", features = ["codec"] }
 futures = "0.3"
