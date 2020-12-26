@@ -6,7 +6,7 @@ This crate provides io traits/structs that automatically recover from potential 
 To use with your project, add the following to your Cargo.toml:
 
 ```toml
-stubborn-io = "0.2"
+stubborn-io = "0.3"
 ```
 
 API Documentation, examples and motivations can be found here -
