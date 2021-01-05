@@ -1,7 +1,7 @@
 use crate::config::ReconnectOptions;
 use log::{error, info};
 use std::future::Future;
-use std::io::{self, ErrorKind};
+use std::io::{self, ErrorKind, IoSlice};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
@@ -384,5 +384,34 @@ where
             Status::Disconnected(_) => Poll::Pending,
             Status::FailedAndExhausted => exhausted_err(),
         }
+    }
+
+    fn poll_write_vectored(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        match &mut self.status {
+            Status::Connected => {
+                let poll =
+                    AsyncWrite::poll_write_vectored(Pin::new(&mut self.underlying_io), cx, bufs);
+
+                if self.is_write_disconnect_detected(&poll) {
+                    self.on_disconnect(cx);
+                    Poll::Pending
+                } else {
+                    poll
+                }
+            }
+            Status::Disconnected(_) => {
+                self.poll_disconnect(cx);
+                Poll::Pending
+            }
+            Status::FailedAndExhausted => exhausted_err(),
+        }
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        self.underlying_io.is_write_vectored()
     }
 }
