@@ -287,6 +287,31 @@ where
             _ => false,
         }
     }
+
+    fn do_write<R>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        method: impl FnOnce(Pin<&mut Self>, &mut Context<'_>) -> Poll<io::Result<R>>,
+    ) -> Poll<io::Result<R>> {
+        match &mut self.status {
+            Status::Connected => {
+                let poll = method(self, cx);
+
+                if self.is_write_disconnect_detected(&poll) {
+                    self.on_disconnect(cx);
+                    Poll::Pending
+                } else {
+                    poll
+                }
+            }
+            Status::Disconnected(_) => {
+                self.poll_disconnect(cx);
+                Poll::Pending
+            }
+            Status::FailedAndExhausted => exhausted_err(),
+        }
+    }
+
 }
 
 impl<T, C> AsyncRead for StubbornIo<T, C>
@@ -331,23 +356,8 @@ where
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        match &mut self.status {
-            Status::Connected => {
-                let poll = AsyncWrite::poll_write(Pin::new(&mut self.underlying_io), cx, buf);
-
-                if self.is_write_disconnect_detected(&poll) {
-                    self.on_disconnect(cx);
-                    Poll::Pending
-                } else {
-                    poll
-                }
-            }
-            Status::Disconnected(_) => {
-                self.poll_disconnect(cx);
-                Poll::Pending
-            }
-            Status::FailedAndExhausted => exhausted_err(),
-        }
+        let method = |p_io, p_cx| AsyncWrite::poll_write(p_io, p_cx, buf);
+        self.do_write(cx, method)
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
