@@ -374,7 +374,7 @@ where
         match &mut self.status {
             Status::Connected => {
                 let poll = AsyncWrite::poll_shutdown(Pin::new(&mut self.underlying_io), cx);
-                if let Poll::Ready(_) = poll {
+                if poll.is_ready() {
                     // if completed, we are disconnected whether error or not
                     self.on_disconnect(cx);
                 }
