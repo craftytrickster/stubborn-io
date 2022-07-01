@@ -81,7 +81,7 @@ impl AsyncRead for DummyIo {
                 Poll::Ready(Err(e))
             }
         } else {
-            let _ = buf.put_slice(&bytes);
+            buf.put_slice(&bytes);
             result
         }
     }
