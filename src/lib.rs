@@ -64,6 +64,4 @@ pub mod tokio;
 #[doc(inline)]
 pub use self::config::ReconnectOptions;
 #[doc(inline)]
-pub use self::strategies::ExpBackoffStrategy;
-#[doc(inline)]
 pub use self::tokio::StubbornTcpStream;

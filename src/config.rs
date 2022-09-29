@@ -1,7 +1,7 @@
 //! Provides options to configure the behavior of stubborn-io items,
 //! specifically related to reconnect behavior.
 
-use crate::strategies::get_standard_reconnect_strategy;
+use crate::strategies::ExpBackoffStrategy;
 use std::time::Duration;
 
 pub type DurationIterator = Box<dyn Iterator<Item = Duration> + Send + Sync>;
@@ -33,7 +33,7 @@ impl ReconnectOptions {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         ReconnectOptions {
-            retries_to_attempt_fn: Box::new(get_standard_reconnect_strategy),
+            retries_to_attempt_fn: Box::new(|| Box::new(ExpBackoffStrategy::default().into_iter())),
             exit_if_first_connect_fails: true,
             on_connect_callback: Box::new(|| {}),
             on_disconnect_callback: Box::new(|| {}),
