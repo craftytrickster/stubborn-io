@@ -55,10 +55,10 @@ impl ExpBackoffStrategy {
 impl Default for ExpBackoffStrategy {
     fn default() -> Self {
         Self {
-            min: Duration::from_secs(5),
+            min: Duration::from_secs(4),
             max: Some(Duration::from_secs(30 * 60)),
-            factor: 1.5,
-            jitter: 0.5,
+            factor: 2.0,
+            jitter: 0.05,
             seed: None,
         }
     }
