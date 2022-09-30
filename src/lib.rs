@@ -55,6 +55,7 @@
 //! ```
 
 pub mod config;
+pub mod strategies;
 
 // in the future, there may be a mod for synchronous regular io too, which is why
 // tokio is specifically chosen to place the async stuff

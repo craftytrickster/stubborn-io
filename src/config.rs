@@ -1,6 +1,7 @@
 //! Provides options to configure the behavior of stubborn-io items,
 //! specifically related to reconnect behavior.
 
+use crate::strategies::ExpBackoffStrategy;
 use std::time::Duration;
 
 pub type DurationIterator = Box<dyn Iterator<Item = Duration> + Send + Sync>;
@@ -32,7 +33,7 @@ impl ReconnectOptions {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         ReconnectOptions {
-            retries_to_attempt_fn: Box::new(get_standard_reconnect_strategy),
+            retries_to_attempt_fn: Box::new(|| Box::new(ExpBackoffStrategy::default().into_iter())),
             exit_if_first_connect_fails: true,
             on_connect_callback: Box::new(|| {}),
             on_disconnect_callback: Box::new(|| {}),
@@ -88,26 +89,4 @@ impl ReconnectOptions {
         self.on_connect_fail_callback = Box::new(cb);
         self
     }
-}
-
-fn get_standard_reconnect_strategy() -> DurationIterator {
-    let initial_attempts = vec![
-        Duration::from_secs(5),
-        Duration::from_secs(10),
-        Duration::from_secs(20),
-        Duration::from_secs(30),
-        Duration::from_secs(40),
-        Duration::from_secs(50),
-        Duration::from_secs(60),
-        Duration::from_secs(60 * 2),
-        Duration::from_secs(60 * 5),
-        Duration::from_secs(60 * 10),
-        Duration::from_secs(60 * 20),
-    ];
-
-    let repeat = std::iter::repeat(Duration::from_secs(60 * 30));
-
-    let forever_iterator = initial_attempts.into_iter().chain(repeat);
-
-    Box::new(forever_iterator)
 }
