@@ -130,20 +130,20 @@ mod test {
         ];
         for expected in expected_values {
             let value = backoff_iter.next().unwrap().as_secs_f64();
-            assert!(value.total_cmp(&expected).is_eq());
+            assert!(value.total_cmp(&expected).is_eq(), "{value} != {expected}");
         }
     }
 
     #[test]
     fn test_exponential_backoff_max_value() {
-        let mut backoff_iter = ExpBackoffStrategy::new(Duration::from_secs(1), 4., 0.0)
+        let mut backoff_iter = ExpBackoffStrategy::new(Duration::from_secs(1), 2., 0.0)
             .with_seed(0)
-            .with_max(Duration::from_secs(2))
+            .with_max(Duration::from_secs(8))
             .into_iter();
-        let expected_values = [1.0, 2.0, 2.0];
+        let expected_values = [1.0, 2.0, 4.0, 8.0, 8.0];
         for expected in expected_values {
             let value = backoff_iter.next().unwrap().as_secs_f64();
-            assert!(value.total_cmp(&expected).is_eq());
+            assert!(value.total_cmp(&expected).is_eq(), "{value} != {expected}");
         }
     }
 }
