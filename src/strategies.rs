@@ -96,10 +96,10 @@ impl Iterator for ExpBackoffIter {
     type Item = Duration;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.pow += 1;
         let base = self.init * self.strategy.factor.powf(self.pow as f64);
         let jitter = base * self.strategy.jitter * (self.rng.gen::<f64>() * 2. - 1.);
         let current = Duration::from_secs_f64(base + jitter);
+        self.pow += 1;
         match self.strategy.max {
             Some(max) => Some(max.min(current)),
             None => Some(current),
@@ -113,16 +113,24 @@ mod test {
     use std::time::Duration;
 
     #[test]
-    fn test_exponential_backoff_jitter_bounds() {
+    fn test_exponential_backoff_jitter_values() {
         let mut backoff_iter = ExpBackoffStrategy::new(Duration::from_secs(1), 2., 0.1)
             .with_seed(0)
             .into_iter();
-        for idx in 1..10 {
+        let expected_values = [
+            1.046222683,
+            2.109384073,
+            3.620675707,
+            8.134654819,
+            15.238946024,
+            33.740716196,
+            60.399320456,
+            135.51906449,
+            268.766127569,
+        ];
+        for expected in expected_values {
             let value = backoff_iter.next().unwrap().as_secs_f64();
-            let lower_bound = 2_u32.pow(idx) as f64 * 0.9;
-            let upper_bound = 2_u32.pow(idx) as f64 * 1.1;
-            assert!(value.total_cmp(&lower_bound).is_ge());
-            assert!(value.total_cmp(&upper_bound).is_le());
+            assert!(value.total_cmp(&expected).is_eq());
         }
     }
 
@@ -132,9 +140,10 @@ mod test {
             .with_seed(0)
             .with_max(Duration::from_secs(2))
             .into_iter();
-        for _ in 1..2 {
+        let expected_values = [1.0, 2.0, 2.0];
+        for expected in expected_values {
             let value = backoff_iter.next().unwrap().as_secs_f64();
-            assert!(value.total_cmp(&2.0).is_eq());
+            assert!(value.total_cmp(&expected).is_eq());
         }
     }
 }
