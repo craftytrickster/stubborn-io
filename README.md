@@ -12,8 +12,6 @@ stubborn-io = "0.3"
 API Documentation, examples and motivations can be found here -
 https://docs.rs/stubborn-io .
 
-*Note: This crate requires at least version 1.39 of the Rust compiler.*
-
 
 ### Usage Example
 
@@ -26,14 +24,12 @@ use tokio::io::AsyncWriteExt;
 
 let addr = "localhost:8080";
 
-async {
-    // we are connecting to the TcpStream using the default built in options.
-    // these can also be customized (for example, the amount of reconnect attempts,
-    // wait duration, etc) using the connect_with_options method.
-    let mut tcp_stream = StubbornTcpStream::connect(addr).await.unwrap();
-    // once we acquire the wrapped IO, in this case, a TcpStream, we can
-    // call all of the regular methods on it, as seen below
-    tcp_stream.write_all(b"hello world!").await.unwrap();
-};
+// we are connecting to the TcpStream using the default built in options.
+// these can also be customized (for example, the amount of reconnect attempts,
+// wait duration, etc) using the connect_with_options method.
+let mut tcp_stream = StubbornTcpStream::connect(addr).await?;
+// once we acquire the wrapped IO, in this case, a TcpStream, we can
+// call all of the regular methods on it, as seen below
+tcp_stream.write_all(b"hello world!").await?;
 ```
 
