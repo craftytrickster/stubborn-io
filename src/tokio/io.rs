@@ -381,7 +381,7 @@ where
 
                 poll
             }
-            Status::Disconnected(_) => Poll::Pending,
+            Status::Disconnected(_) => exhausted_err(),
             Status::FailedAndExhausted => exhausted_err(),
         }
     }

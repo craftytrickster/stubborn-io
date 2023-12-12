@@ -175,6 +175,31 @@ mod already_connected {
     use tokio_util::codec::{Framed, LinesCodec};
 
     #[tokio::test]
+    async fn back_to_back_shutdown_attempts() {
+        use stubborn_io::StubbornTcpStream;
+        use tokio::io::AsyncWriteExt;
+
+        const ADDR: &str = "127.0.0.1:3989";
+
+        tokio::spawn(async move {
+            let mut streams = Vec::new();
+            let listener = tokio::net::TcpListener::bind(ADDR).await.unwrap();
+            loop {
+                let (stream, _addr) = listener.accept().await.unwrap();
+                streams.push(stream);
+            }
+        });
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let mut connection = StubbornTcpStream::connect(ADDR).await.unwrap();
+
+        connection.shutdown().await.unwrap();
+        let elapsed = tokio::time::timeout(Duration::from_secs(5), connection.shutdown()).await;
+
+        let result = elapsed.unwrap();
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
     async fn should_ignore_non_fatal_errors_and_continue_as_connected() {
         let connect_outcomes = Arc::new(Mutex::new(vec![true]));
 
