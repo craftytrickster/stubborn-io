@@ -95,12 +95,24 @@ enum Status<T, C> {
     FailedAndExhausted, // the way one feels after programming in dynamically typed languages
 }
 
+#[inline]
+fn poll_err<T>(
+    kind: ErrorKind,
+    reason: impl Into<Box<dyn std::error::Error + Send + Sync>>,
+) -> Poll<io::Result<T>> {
+    let io_err = io::Error::new(kind, reason);
+    Poll::Ready(Err(io_err))
+}
+
 fn exhausted_err<T>() -> Poll<io::Result<T>> {
-    let io_err = io::Error::new(
+    poll_err(
         ErrorKind::NotConnected,
         "Disconnected. Connection attempts have been exhausted.",
-    );
-    Poll::Ready(Err(io_err))
+    )
+}
+
+fn disconnected_err<T>() -> Poll<io::Result<T>> {
+    poll_err(ErrorKind::NotConnected, "Underlying I/O is disconnected.")
 }
 
 impl<T, C> Deref for StubbornIo<T, C> {
@@ -381,7 +393,7 @@ where
 
                 poll
             }
-            Status::Disconnected(_) => exhausted_err(),
+            Status::Disconnected(_) => disconnected_err(),
             Status::FailedAndExhausted => exhausted_err(),
         }
     }

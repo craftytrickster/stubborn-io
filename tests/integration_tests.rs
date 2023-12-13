@@ -23,5 +23,6 @@ async fn back_to_back_shutdown_attempts() {
     let elapsed = tokio::time::timeout(Duration::from_secs(5), connection.shutdown()).await;
 
     let result = elapsed.unwrap();
-    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::NotConnected);
 }
