@@ -1,38 +1,68 @@
 #[allow(unused_macros)]
 macro_rules! trace {
-    ($($arg:tt)*) => {
+    ($($arg:expr),*) => {
 	#[cfg(feature = "log")]
-        log::trace!($($arg)*);
+        log::trace!($($arg),*);
+	#[cfg(not(feature = "log"))]
+	{
+	    $(
+		let _ = $arg;
+	    )*
+	}
     };
 }
 
 #[allow(unused_macros)]
 macro_rules! debug {
-    ($($arg:tt)*) => {
+    ($($arg:expr),*) => {
 	#[cfg(feature = "log")]
-        log::debug!($($arg)*);
+        log::debug!($($arg),*);
+	#[cfg(not(feature = "log"))]
+	{
+	    $(
+		let _ = $arg;
+	    )*
+	}
     };
 }
 
 macro_rules! info {
-    ($($arg:tt)*) => {
+    ($($arg:expr),*) => {
 	#[cfg(feature = "log")]
-        log::info!($($arg)*);
+        log::info!($($arg),*);
+	#[cfg(not(feature = "log"))]
+	{
+	    $(
+		let _ = $arg;
+	    )*
+	}
     };
 }
 
 #[allow(unused_macros)]
 macro_rules! warn {
-    ($($arg:tt)*) => {
+    ($($arg:expr),*) => {
 	#[cfg(feature = "log")]
-        log::warn!($($arg)*);
+        log::warn!($($arg),*);
+	#[cfg(not(feature = "log"))]
+	{
+	    $(
+		let _ = $arg;
+	    )*
+	}
     };
 }
 
 macro_rules! error {
-    ($($arg:tt)*) => {
+    ($($arg:expr),*) => {
 	#[cfg(feature = "log")]
-        log::error!($($arg)*);
+        log::error!($($arg),*);
+	#[cfg(not(feature = "log"))]
+	{
+	    $(
+		let _ = $arg;
+	    )*
+	}
     };
 }
 

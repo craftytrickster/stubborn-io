@@ -160,16 +160,16 @@ where
                 let mut result = Err(e);
 
                 for (i, duration) in (options.retries_to_attempt_fn)().enumerate() {
-                    let _reconnect_num = i + 1;
+                    let reconnect_num = i + 1;
 
                     info!(
                         "Will re-perform initial connect attempt #{} in {:?}.",
-                        _reconnect_num, duration
+                        reconnect_num, duration
                     );
 
                     sleep(duration).await;
 
-                    info!("Attempting reconnect #{} now.", _reconnect_num);
+                    info!("Attempting reconnect #{} now.", reconnect_num);
 
                     match T::establish(ctor_arg.clone()).await {
                         Ok(tcp) => {
@@ -236,11 +236,11 @@ where
             let future_instant = sleep(next_duration);
 
             reconnect_status.attempts_tracker.attempt_num += 1;
-            let _cur_num = reconnect_status.attempts_tracker.attempt_num;
+            let cur_num = reconnect_status.attempts_tracker.attempt_num;
 
             let reconnect_attempt = async move {
                 future_instant.await;
-                info!("Attempting reconnect #{} now.", _cur_num);
+                info!("Attempting reconnect #{} now.", cur_num);
                 T::establish(ctor_arg).await
             };
 
@@ -256,7 +256,7 @@ where
     }
 
     fn poll_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) {
-        let (attempt, _attempt_num) = match &mut self.status {
+        let (attempt, attempt_num) = match &mut self.status {
             Status::Connected => unreachable!(),
             Status::Disconnected(ref mut status) => (
                 Pin::new(&mut status.reconnect_attempt),
@@ -273,8 +273,8 @@ where
                 (self.options.on_connect_callback)();
                 self.underlying_io = underlying_io;
             }
-            Poll::Ready(Err(_err)) => {
-                error!("Connection attempt #{} failed: {:?}", _attempt_num, _err);
+            Poll::Ready(Err(err)) => {
+                error!("Connection attempt #{} failed: {:?}", attempt_num, err);
                 self.on_disconnect(cx);
             }
             Poll::Pending => {}
