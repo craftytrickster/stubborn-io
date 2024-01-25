@@ -141,16 +141,16 @@ where
         Self::connect_with_options(ctor_arg, options).await
     }
 
-    pub async fn connect_with_options(ctor_arg: C, options: ReconnectOptions) -> io::Result<Self> {
+    pub async fn connect_with_options(ctor_arg: C, mut options: ReconnectOptions) -> io::Result<Self> {
         let tcp = match T::establish(ctor_arg.clone()).await {
             Ok(tcp) => {
                 info!("Initial connection succeeded.");
-                (options.on_connect_callback)();
+		options.connect_callback();
                 tcp
             }
             Err(e) => {
                 error!("Initial connection failed due to: {:?}.", e);
-                (options.on_connect_fail_callback)();
+		options.connect_fail_callback();
 
                 if options.exit_if_first_connect_fails {
                     error!("Bailing after initial connection failure.");
@@ -174,12 +174,12 @@ where
                     match T::establish(ctor_arg.clone()).await {
                         Ok(tcp) => {
                             result = Ok(tcp);
-                            (options.on_connect_callback)();
+			    options.connect_callback();
                             info!("Initial connection successfully established.");
                             break;
                         }
                         Err(e) => {
-                            (options.on_connect_fail_callback)();
+			    options.connect_fail_callback();
                             result = Err(e);
                         }
                     }
@@ -208,11 +208,11 @@ where
             // initial disconnect
             Status::Connected => {
                 error!("Disconnect occurred");
-                (self.options.on_disconnect_callback)();
+		self.options.disconnect_callback();
                 self.status = Status::Disconnected(ReconnectStatus::new(&self.options));
             }
             Status::Disconnected(_) => {
-                (self.options.on_connect_fail_callback)();
+		self.options.connect_fail_callback();
             }
             Status::FailedAndExhausted => {
                 unreachable!("on_disconnect will not occur for already exhausted state.")
@@ -270,7 +270,7 @@ where
                 info!("Connection re-established");
                 cx.waker().wake_by_ref();
                 self.status = Status::Connected;
-                (self.options.on_connect_callback)();
+		self.options.connect_callback();
                 self.underlying_io = underlying_io;
             }
             Poll::Ready(Err(err)) => {
