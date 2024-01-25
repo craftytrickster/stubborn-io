@@ -55,6 +55,7 @@
 //! ```
 
 pub mod config;
+mod log;
 pub mod strategies;
 
 // in the future, there may be a mod for synchronous regular io too, which is why

@@ -1,5 +1,5 @@
 use crate::config::ReconnectOptions;
-use log::{error, info};
+use crate::log::{error, info};
 use std::future::Future;
 use std::io::{self, ErrorKind, IoSlice};
 use std::marker::PhantomData;
