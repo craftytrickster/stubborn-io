@@ -4,26 +4,26 @@
 use crate::strategies::ExpBackoffStrategy;
 use std::time::Duration;
 
-pub type DurationIterator = Box<dyn Iterator<Item = Duration> + Send + Sync>;
+pub type DurationIterator = Box<dyn Iterator<Item = Duration> + Send>;
 
 /// User specified options that control the behavior of the stubborn-io upon disconnect.
 pub struct ReconnectOptions {
     /// Represents a function that generates an Iterator
     /// to schedule the wait between reconnection attempts.
-    pub retries_to_attempt_fn: Box<dyn Fn() -> DurationIterator + Send + Sync>,
+    pub retries_to_attempt_fn: Box<dyn Fn() -> DurationIterator + Send>,
 
     /// If this is set to true, if the initial connect method of the stubborn-io item fails,
     /// then no further reconnects will be attempted
     pub exit_if_first_connect_fails: bool,
 
     /// Invoked when the StubbornIo establishes a connection
-    pub on_connect_callback: Option<Box<dyn FnMut() + Send + Sync>>,
+    pub on_connect_callback: Option<Box<dyn FnMut() + Send>>,
 
     /// Invoked when the StubbornIo loses its active connection
-    pub on_disconnect_callback: Option<Box<dyn FnMut() + Send + Sync>>,
+    pub on_disconnect_callback: Option<Box<dyn FnMut() + Send>>,
 
     /// Invoked when the StubbornIo fails a connection attempt
-    pub on_connect_fail_callback: Option<Box<dyn FnMut() + Send + Sync>>,
+    pub on_connect_fail_callback: Option<Box<dyn FnMut() + Send>>,
 }
 
 impl ReconnectOptions {
@@ -75,20 +75,17 @@ impl ReconnectOptions {
         self
     }
 
-    pub fn with_on_connect_callback(mut self, cb: impl FnMut() + 'static + Send + Sync) -> Self {
+    pub fn with_on_connect_callback(mut self, cb: impl FnMut() + 'static + Send) -> Self {
         self.on_connect_callback = Some(Box::new(cb));
         self
     }
 
-    pub fn with_on_disconnect_callback(mut self, cb: impl FnMut() + 'static + Send + Sync) -> Self {
+    pub fn with_on_disconnect_callback(mut self, cb: impl FnMut() + 'static + Send) -> Self {
         self.on_disconnect_callback = Some(Box::new(cb));
         self
     }
 
-    pub fn with_on_connect_fail_callback(
-        mut self,
-        cb: impl FnMut() + 'static + Send + Sync,
-    ) -> Self {
+    pub fn with_on_connect_fail_callback(mut self, cb: impl FnMut() + 'static + Send) -> Self {
         self.on_connect_fail_callback = Some(Box::new(cb));
         self
     }
