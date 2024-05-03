@@ -100,7 +100,11 @@ pub mod instantiating {
             ..DummyCtor::default()
         };
 
-        let dummy = StubbornDummy::connect(ctor).await;
+        let mut opts = ReconnectOptions::new();
+        opts.retries_to_attempt_fn =
+            Box::new(|| Box::new(vec![Duration::from_millis(1)].into_iter()));
+
+        let dummy = StubbornDummy::connect_with_options(ctor, opts).await;
 
         assert!(dummy.is_ok());
     }
