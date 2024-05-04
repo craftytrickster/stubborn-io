@@ -5,6 +5,7 @@ use std::io::{self, ErrorKind, IoSlice};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -53,12 +54,13 @@ where
 
 struct AttemptsTracker {
     attempt_num: usize,
-    retries_remaining: Box<dyn Iterator<Item = Duration> + Send>,
+    retries_remaining: Box<dyn Iterator<Item = Duration> + Send + Sync>,
 }
 
 struct ReconnectStatus<T, C> {
     attempts_tracker: AttemptsTracker,
-    reconnect_attempt: Pin<Box<dyn Future<Output = io::Result<T>> + Send>>,
+    #[allow(clippy::type_complexity)]
+    reconnect_attempt: Arc<Mutex<Pin<Box<dyn Future<Output = io::Result<T>> + Send>>>>,
     _phantom_data: PhantomData<C>,
 }
 
@@ -73,7 +75,9 @@ where
                 attempt_num: 0,
                 retries_remaining: (options.retries_to_attempt_fn)(),
             },
-            reconnect_attempt: Box::pin(async { unreachable!("Not going to happen") }),
+            reconnect_attempt: Arc::new(Mutex::new(Box::pin(async {
+                unreachable!("Not going to happen")
+            }))),
             _phantom_data: PhantomData,
         }
     }
@@ -244,7 +248,7 @@ where
                 T::establish(ctor_arg).await
             };
 
-            reconnect_status.reconnect_attempt = Box::pin(reconnect_attempt);
+            reconnect_status.reconnect_attempt = Arc::new(Mutex::new(Box::pin(reconnect_attempt)));
 
             info!(
                 "Will perform reconnect attempt #{} in {:?}.",
@@ -256,16 +260,18 @@ where
     }
 
     fn poll_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) {
-        let (attempt, attempt_num) = match &mut self.status {
+        let (attempt, attempt_num) = match self.status {
             Status::Connected => unreachable!(),
             Status::Disconnected(ref mut status) => (
-                Pin::new(&mut status.reconnect_attempt),
+                status.reconnect_attempt.clone(),
                 status.attempts_tracker.attempt_num,
             ),
             Status::FailedAndExhausted => unreachable!(),
         };
 
-        match attempt.poll(cx) {
+        let mut attempt = attempt.lock().unwrap();
+
+        match attempt.as_mut().poll(cx) {
             Poll::Ready(Ok(underlying_io)) => {
                 info!("Connection re-established");
                 cx.waker().wake_by_ref();

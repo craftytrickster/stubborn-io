@@ -9,7 +9,7 @@ keywords = ["reconnect", "retry", "stubborn", "io", "StubbornTcpStream"]
 repository = "https://github.com/craftytrickster/stubborn-io"
 documentation = "https://docs.rs/stubborn-io"
 readme = "README.md"
- 
+
 [dependencies]
 tokio = { version = "1", features = ["time", "net"] }
 rand = "0.8"

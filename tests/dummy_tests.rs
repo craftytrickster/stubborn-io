@@ -290,3 +290,25 @@ mod already_connected {
         assert!(msg.unwrap().is_err());
     }
 }
+
+#[tokio::test]
+async fn test_that_works_with_sync() {
+    fn make_framed<T>(_stream: T)
+    where
+        T: AsyncRead + AsyncWrite + Send + Sync + 'static,
+    {
+        let _ = _stream;
+    }
+
+    let options = ReconnectOptions::new();
+    let connect_outcomes = Arc::new(Mutex::new(vec![true]));
+    let ctor = DummyCtor {
+        connect_outcomes,
+        ..DummyCtor::default()
+    };
+    let dummy = StubbornDummy::connect_with_options(ctor, options)
+        .await
+        .unwrap();
+
+    make_framed(dummy);
+}
