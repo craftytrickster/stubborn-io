@@ -16,13 +16,13 @@ pub struct ReconnectOptions {
     /// then no further reconnects will be attempted
     pub exit_if_first_connect_fails: bool,
 
-    /// Invoked when the StubbornIo establishes a connection
+    /// Invoked when the `StubbornIo` establishes a connection
     pub on_connect_callback: Box<dyn Fn() + Send + Sync>,
 
-    /// Invoked when the StubbornIo loses its active connection
+    /// Invoked when the `StubbornIo` loses its active connection
     pub on_disconnect_callback: Box<dyn Fn() + Send + Sync>,
 
-    /// Invoked when the StubbornIo fails a connection attempt
+    /// Invoked when the `StubbornIo` fails a connection attempt
     pub on_connect_fail_callback: Box<dyn Fn() + Send + Sync>,
 }
 
@@ -60,6 +60,7 @@ impl ReconnectOptions {
     ///     ]
     /// });
     /// ```
+    #[must_use]
     pub fn with_retries_generator<F, I, IN>(mut self, retries_generator: F) -> Self
     where
         F: 'static + Send + Sync + Fn() -> IN,
@@ -70,21 +71,25 @@ impl ReconnectOptions {
         self
     }
 
+    #[must_use]
     pub fn with_exit_if_first_connect_fails(mut self, value: bool) -> Self {
         self.exit_if_first_connect_fails = value;
         self
     }
 
+    #[must_use]
     pub fn with_on_connect_callback(mut self, cb: impl Fn() + 'static + Send + Sync) -> Self {
         self.on_connect_callback = Box::new(cb);
         self
     }
 
+    #[must_use]
     pub fn with_on_disconnect_callback(mut self, cb: impl Fn() + 'static + Send + Sync) -> Self {
         self.on_disconnect_callback = Box::new(cb);
         self
     }
 
+    #[must_use]
     pub fn with_on_connect_fail_callback(mut self, cb: impl Fn() + 'static + Send + Sync) -> Self {
         self.on_connect_fail_callback = Box::new(cb);
         self

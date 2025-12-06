@@ -11,18 +11,18 @@ use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::time::sleep;
 
-/// Trait that should be implemented for an [AsyncRead] and/or [AsyncWrite]
-/// item to enable it to work with the [StubbornIo] struct.
+/// Trait that should be implemented for an [`AsyncRead`] and/or [`AsyncWrite`]
+/// item to enable it to work with the [`StubbornIo`] struct.
 pub trait UnderlyingIo<C>: Sized + Unpin
 where
     C: Clone + Send + Unpin,
 {
-    /// The creation function is used by StubbornIo in order to establish both the initial IO connection
+    /// The creation function is used by `StubbornIo` in order to establish both the initial IO connection
     /// in addition to performing reconnects.
     fn establish(ctor_arg: C) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>>;
 
     /// When IO items experience an [io::Error](io::Error) during operation, it does not necessarily mean
-    /// it is a disconnect/termination (ex: WouldBlock). This trait provides sensible defaults to classify
+    /// it is a disconnect/termination (ex: `WouldBlock`). This trait provides sensible defaults to classify
     /// which errors are considered "disconnects", but this can be overridden based on the user's needs.
     fn is_disconnect_error(&self, err: &io::Error) -> bool {
         use std::io::ErrorKind::*;
@@ -42,9 +42,9 @@ where
         )
     }
 
-    /// If the underlying IO item implements AsyncRead, this method allows the user to specify
+    /// If the underlying IO item implements `AsyncRead`, this method allows the user to specify
     /// if a technically successful read actually means that the connect is closed.
-    /// For example, tokio's TcpStream successfully performs a read of 0 bytes when closed.
+    /// For example, tokio's `TcpStream` successfully performs a read of 0 bytes when closed.
     fn is_final_read(&self, bytes_read: usize) -> bool {
         // definitely true for tcp, perhaps true for other io as well,
         // indicative of EOF hit
@@ -83,8 +83,8 @@ where
     }
 }
 
-/// The StubbornIo is a wrapper over a tokio AsyncRead/AsyncWrite item that will automatically
-/// invoke the [UnderlyingIo::establish] upon initialization and when a reconnect is needed.
+/// The `StubbornIo` is a wrapper over a tokio AsyncRead/AsyncWrite item that will automatically
+/// invoke the [`UnderlyingIo::establish`] upon initialization and when a reconnect is needed.
 /// Because it implements deref, you are able to invoke all of the original methods on the wrapped IO.
 pub struct StubbornIo<T, C> {
     status: Status<T, C>,
@@ -138,7 +138,7 @@ where
     T: UnderlyingIo<C>,
     C: Clone + Send + Unpin + 'static,
 {
-    /// Connects or creates a handle to the UnderlyingIo item,
+    /// Connects or creates a handle to the `UnderlyingIo` item,
     /// using the default reconnect options.
     pub async fn connect(ctor_arg: C) -> io::Result<Self> {
         let options = ReconnectOptions::new();
@@ -221,7 +221,7 @@ where
             Status::FailedAndExhausted => {
                 unreachable!("on_disconnect will not occur for already exhausted state.")
             }
-        };
+        }
 
         let ctor_arg = self.ctor_arg.clone();
 
