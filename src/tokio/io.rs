@@ -91,6 +91,7 @@ pub struct StubbornIo<T, C> {
     underlying_io: T,
     options: ReconnectOptions,
     ctor_arg: C,
+    reconnection_stopped: bool,
 }
 
 enum Status<T, C> {
@@ -204,10 +205,28 @@ where
             ctor_arg,
             underlying_io: tcp,
             options,
+            reconnection_stopped: false,
         })
     }
 
+    /// Stops any further reconnect attempts.
+    pub fn stop_reconnection(&mut self) {
+        self.reconnection_stopped = true;
+    }
+
+    /// Returns true if shutdown has been initiated.
+    pub fn is_reconnection_stopped(&self) -> bool {
+        self.reconnection_stopped
+    }
+
     fn on_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) {
+        if self.is_reconnection_stopped() {
+            info!("Reconnection stopped - not attempting reconnection.");
+            self.status = Status::FailedAndExhausted;
+            cx.waker().wake_by_ref();
+            return;
+        }
+
         match &mut self.status {
             // initial disconnect
             Status::Connected => {
@@ -260,6 +279,13 @@ where
     }
 
     fn poll_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) {
+        if self.is_reconnection_stopped() {
+            info!("Reconnection stopped during reconnection - not attempting reconnect.");
+            self.status = Status::FailedAndExhausted;
+            cx.waker().wake_by_ref();
+            return;
+        }
+
         let (attempt, attempt_num) = match self.status {
             Status::Connected => unreachable!(),
             Status::Disconnected(ref mut status) => (
