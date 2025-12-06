@@ -2,20 +2,20 @@
 //! to automatically reconnect upon failures. This is done so that a user can use them without worrying
 //! that their application logic will terminate simply due to an event like a temporary network failure.
 //!
-//! This crate will try to provide commonly used io items, for example, the [StubbornTcpStream](StubbornTcpStream).
-//! If you need to create your own, you simply need to implement the [UnderlyingIo](crate::tokio::UnderlyingIo) trait.
-//! Once implemented, you can construct it easily by creating a [StubbornIo](crate::tokio::StubbornIo) type as seen below.
+//! This crate will try to provide commonly used io items, for example, the [StubbornTcpStream].
+//! If you need to create your own, you simply need to implement the [`UnderlyingIo`](crate::tokio::UnderlyingIo) trait.
+//! Once implemented, you can construct it easily by creating a [`StubbornIo`](crate::tokio::StubbornIo) type as seen below.
 //!
 //! *This crate requires at least version 1.39 of the Rust compiler.*
 //!
 //! ### Motivations
 //! This crate was created because I was working on a service that needed to fetch data from a remote server
-//! via a tokio TcpConnection. It normally worked perfectly (as does all of my code ☺), but every time the
+//! via a tokio `TcpConnection`. It normally worked perfectly (as does all of my code ☺), but every time the
 //! remote server had a restart or turnaround, my application logic would stop working.
-//! **stubborn-io** was born because I did not want to complicate my service's logic with TcpStream
+//! **stubborn-io** was born because I did not want to complicate my service's logic with `TcpStream`
 //! reconnect and disconnect handling code. With stubborn-io, I can keep the service exactly the same,
-//! knowing that the StubbornTcpStream's sensible defaults will perform reconnects in a way to keep my service running.
-//! Once I realized that the implementation could apply to all IO items and not just TcpStream, I made it customizable as
+//! knowing that the `StubbornTcpStream`'s sensible defaults will perform reconnects in a way to keep my service running.
+//! Once I realized that the implementation could apply to all IO items and not just `TcpStream`, I made it customizable as
 //! seen below.
 //!
 //! ## Example on how a Stubborn IO item might be created

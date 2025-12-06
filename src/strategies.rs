@@ -40,12 +40,14 @@ impl ExpBackoffStrategy {
 
     /// Set the exponential backoff strategy's maximum wait value to the given duration.
     /// Otherwise, this value will be the maximum possible duration.
+    #[must_use]
     pub fn with_max(mut self, max: Duration) -> Self {
         self.max = Some(max);
         self
     }
 
     /// Set the seed used to generate jitter. Otherwise, will set RNG via entropy.
+    #[must_use]
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.seed = Some(seed);
         self
@@ -72,7 +74,7 @@ impl IntoIterator for ExpBackoffStrategy {
         let init = self.min.as_secs_f64();
         let rng = match self.seed {
             Some(seed) => StdRng::seed_from_u64(seed),
-            None => StdRng::from_entropy(),
+            None => StdRng::from_os_rng(),
         };
 
         ExpBackoffIter {
@@ -84,7 +86,7 @@ impl IntoIterator for ExpBackoffStrategy {
     }
 }
 
-/// Iterator class for [ExpBackoffStrategy]
+/// Iterator class for [`ExpBackoffStrategy`]
 pub struct ExpBackoffIter {
     strategy: ExpBackoffStrategy,
     init: f64,
@@ -96,8 +98,8 @@ impl Iterator for ExpBackoffIter {
     type Item = Duration;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let base = self.init * self.strategy.factor.powf(self.pow as f64);
-        let jitter = base * self.strategy.jitter * (self.rng.gen::<f64>() * 2. - 1.);
+        let base = self.init * self.strategy.factor.powf(f64::from(self.pow));
+        let jitter = base * self.strategy.jitter * (self.rng.random::<f64>() * 2. - 1.);
         let current = Duration::from_secs_f64(base + jitter);
         self.pow += 1;
         match self.strategy.max {
