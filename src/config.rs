@@ -3,6 +3,7 @@
 
 use crate::strategies::ExpBackoffStrategy;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 
 pub type DurationIterator = Box<dyn Iterator<Item = Duration> + Send + Sync>;
 
@@ -24,6 +25,9 @@ pub struct ReconnectOptions {
 
     /// Invoked when the `StubbornIo` fails a connection attempt
     pub on_connect_fail_callback: Box<dyn Fn() + Send + Sync>,
+
+    // Optional external cancel token to interrupt reconnection attempts
+    pub cancel_token: Option<CancellationToken>,
 }
 
 impl ReconnectOptions {
@@ -38,6 +42,7 @@ impl ReconnectOptions {
             on_connect_callback: Box::new(|| {}),
             on_disconnect_callback: Box::new(|| {}),
             on_connect_fail_callback: Box::new(|| {}),
+            cancel_token: None,
         }
     }
 
@@ -92,6 +97,11 @@ impl ReconnectOptions {
     #[must_use]
     pub fn with_on_connect_fail_callback(mut self, cb: impl Fn() + 'static + Send + Sync) -> Self {
         self.on_connect_fail_callback = Box::new(cb);
+        self
+    }
+
+    pub fn with_cancel_token(mut self, token: CancellationToken) -> Self {
+        self.cancel_token = Some(token);
         self
     }
 }

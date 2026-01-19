@@ -11,7 +11,8 @@ documentation = "https://docs.rs/stubborn-io"
 readme = "README.md"
 
 [dependencies]
-tokio = { version = "1", features = ["time", "net"] }
+tokio = { version = "1", features = ["time", "net", "sync", "macros"] }
+tokio-util = "0.7"
 rand = "0.9"
 
 log = { version = "0.4", optional = true }

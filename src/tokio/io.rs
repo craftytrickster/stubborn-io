@@ -91,7 +91,6 @@ pub struct StubbornIo<T, C> {
     underlying_io: T,
     options: ReconnectOptions,
     ctor_arg: C,
-    reconnection_stopped: bool,
 }
 
 enum Status<T, C> {
@@ -172,7 +171,17 @@ where
                         reconnect_num, duration
                     );
 
-                    sleep(duration).await;
+                    if let Some(token) = &options.cancel_token {
+                        tokio::select! {
+                            _ = token.cancelled() => {
+                                info!("Reconnect cancelled via cancel token.");
+                                return Err(io::Error::new(ErrorKind::Interrupted, "Reconnect cancelled via cancel token."));
+                            }
+                            _ = sleep(duration) => {}
+                        }
+                    } else {
+                        sleep(duration).await;
+                    }
 
                     info!("Attempting reconnect #{} now.", reconnect_num);
 
@@ -205,28 +214,10 @@ where
             ctor_arg,
             underlying_io: tcp,
             options,
-            reconnection_stopped: false,
         })
     }
 
-    /// Stops any further reconnect attempts.
-    pub fn stop_reconnection(&mut self) {
-        self.reconnection_stopped = true;
-    }
-
-    /// Returns true if shutdown has been initiated.
-    pub fn is_reconnection_stopped(&self) -> bool {
-        self.reconnection_stopped
-    }
-
     fn on_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) {
-        if self.is_reconnection_stopped() {
-            info!("Reconnection stopped - not attempting reconnection.");
-            self.status = Status::FailedAndExhausted;
-            cx.waker().wake_by_ref();
-            return;
-        }
-
         match &mut self.status {
             // initial disconnect
             Status::Connected => {
@@ -243,6 +234,7 @@ where
         }
 
         let ctor_arg = self.ctor_arg.clone();
+        let cancel_token = self.options.cancel_token.clone();
 
         // this is ensured to be true now
         if let Status::Disconnected(reconnect_status) = &mut self.status {
@@ -262,7 +254,17 @@ where
             let cur_num = reconnect_status.attempts_tracker.attempt_num;
 
             let reconnect_attempt = async move {
-                future_instant.await;
+                if let Some(token) = cancel_token {
+                    tokio::select! {
+                        _ = token.cancelled() => {
+                            info!("Reconnect cancelled via cancel token.");
+                            return Err(io::Error::new(ErrorKind::Interrupted, "Reconnect cancelled via cancel token."));
+                        }
+                        _ = future_instant => {}
+                    }
+                } else {
+                    future_instant.await;
+                }
                 info!("Attempting reconnect #{} now.", cur_num);
                 T::establish(ctor_arg).await
             };
@@ -279,13 +281,6 @@ where
     }
 
     fn poll_disconnect(mut self: Pin<&mut Self>, cx: &mut Context) {
-        if self.is_reconnection_stopped() {
-            info!("Reconnection stopped during reconnection - not attempting reconnect.");
-            self.status = Status::FailedAndExhausted;
-            cx.waker().wake_by_ref();
-            return;
-        }
-
         let (attempt, attempt_num) = match self.status {
             Status::Connected => unreachable!(),
             Status::Disconnected(ref mut status) => (
@@ -306,8 +301,20 @@ where
                 self.underlying_io = underlying_io;
             }
             Poll::Ready(Err(err)) => {
-                error!("Connection attempt #{} failed: {:?}", attempt_num, err);
-                self.on_disconnect(cx);
+                if self
+                    .options
+                    .cancel_token
+                    .as_ref()
+                    .map(|t| t.is_cancelled())
+                    .unwrap_or(false)
+                {
+                    info!("Reconnection cancelled");
+                    self.status = Status::FailedAndExhausted;
+                    cx.waker().wake_by_ref();
+                } else {
+                    error!("Connection attempt #{} failed: {:?}", attempt_num, err);
+                    self.on_disconnect(cx);
+                }
             }
             Poll::Pending => {}
         }
