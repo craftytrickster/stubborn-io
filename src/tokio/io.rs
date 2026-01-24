@@ -171,16 +171,12 @@ where
                         reconnect_num, duration
                     );
 
-                    if let Some(token) = &options.cancel_token {
-                        tokio::select! {
-                            _ = token.cancelled() => {
-                                info!("Reconnect cancelled via cancel token.");
-                                return Err(io::Error::new(ErrorKind::Interrupted, "Reconnect cancelled via cancel token."));
-                            }
-                            _ = sleep(duration) => {}
+                    tokio::select! {
+                        _ = options.cancel_token.cancelled() => {
+                            info!("Reconnect cancelled via cancel token.");
+                            return Err(io::Error::new(ErrorKind::Interrupted, "Reconnect cancelled via cancel token."));
                         }
-                    } else {
-                        sleep(duration).await;
+                        _ = sleep(duration) => {}
                     }
 
                     info!("Attempting reconnect #{} now.", reconnect_num);
@@ -254,17 +250,14 @@ where
             let cur_num = reconnect_status.attempts_tracker.attempt_num;
 
             let reconnect_attempt = async move {
-                if let Some(token) = cancel_token {
-                    tokio::select! {
-                        _ = token.cancelled() => {
-                            info!("Reconnect cancelled via cancel token.");
-                            return Err(io::Error::new(ErrorKind::Interrupted, "Reconnect cancelled via cancel token."));
-                        }
-                        _ = future_instant => {}
+                tokio::select! {
+                    _ = cancel_token.cancelled() => {
+                        info!("Reconnect cancelled via cancel token.");
+                        return Err(io::Error::new(ErrorKind::Interrupted, "Reconnect cancelled via cancel token."));
                     }
-                } else {
-                    future_instant.await;
+                    _ = future_instant => {}
                 }
+
                 info!("Attempting reconnect #{} now.", cur_num);
                 T::establish(ctor_arg).await
             };
@@ -301,13 +294,7 @@ where
                 self.underlying_io = underlying_io;
             }
             Poll::Ready(Err(err)) => {
-                if self
-                    .options
-                    .cancel_token
-                    .as_ref()
-                    .map(|t| t.is_cancelled())
-                    .unwrap_or(false)
-                {
+                if self.options.cancel_token.is_cancelled() {
                     info!("Reconnection cancelled");
                     self.status = Status::FailedAndExhausted;
                     cx.waker().wake_by_ref();

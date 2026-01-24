@@ -1,89 +1,15 @@
 use futures::stream::StreamExt;
-use std::future::Future;
 use std::io::{self, ErrorKind};
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
+use std::task::Poll;
 use std::time::Duration;
-use stubborn_io::tokio::{StubbornIo, UnderlyingIo};
 use stubborn_io::ReconnectOptions;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_util::codec::{Framed, LinesCodec};
 use tokio_util::sync::CancellationToken;
 
-type ConnectOutcomes = Arc<Mutex<Vec<bool>>>;
-type PollReadResults = Arc<Mutex<Vec<(Poll<io::Result<()>>, Vec<u8>)>>>;
-type StubbornDummy = StubbornIo<DummyIo, DummyCtor>;
+mod common;
 
-#[derive(Default)]
-pub struct DummyIo {
-    poll_read_result: PollReadResults,
-}
-
-#[derive(Default, Clone)]
-pub struct DummyCtor {
-    connect_outcomes: ConnectOutcomes,
-    poll_read_results: PollReadResults,
-}
-
-impl UnderlyingIo<DummyCtor> for DummyIo {
-    fn establish(ctor: DummyCtor) -> Pin<Box<dyn Future<Output = io::Result<Self>> + Send>> {
-        let mut connect_attempt_outcome_results = ctor.connect_outcomes.lock().unwrap();
-        let should_succeed = connect_attempt_outcome_results.remove(0);
-
-        Box::pin(async move {
-            if should_succeed {
-                Ok(DummyIo {
-                    poll_read_result: ctor.poll_read_results,
-                })
-            } else {
-                Err(io::Error::new(ErrorKind::NotConnected, "Not connected"))
-            }
-        })
-    }
-}
-
-impl AsyncWrite for DummyIo {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-        _buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        unreachable!();
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        unreachable!();
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Poll::Ready(Ok(()))
-    }
-}
-
-impl AsyncRead for DummyIo {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        let mut results = self.poll_read_result.lock().unwrap();
-        let (result, bytes) = results.remove(0);
-
-        match result {
-            Poll::Ready(Err(e)) if e.kind() == ErrorKind::WouldBlock => {
-                cx.waker().wake_by_ref();
-                Poll::Pending
-            }
-            Poll::Ready(Ok(())) => {
-                buf.put_slice(&bytes);
-                Poll::Ready(Ok(()))
-            }
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-            Poll::Pending => Poll::Pending,
-        }
-    }
-}
+use common::{DummyCtor, StubbornDummy};
 
 fn dummy_ctor(outcomes: Vec<bool>) -> DummyCtor {
     DummyCtor {
