@@ -27,7 +27,7 @@ pub struct ReconnectOptions {
     pub on_connect_fail_callback: Box<dyn Fn() + Send + Sync>,
 
     // Optional external cancel token to interrupt reconnection attempts
-    pub cancel_token: Option<CancellationToken>,
+    pub cancel_token: CancellationToken,
 }
 
 impl ReconnectOptions {
@@ -42,7 +42,8 @@ impl ReconnectOptions {
             on_connect_callback: Box::new(|| {}),
             on_disconnect_callback: Box::new(|| {}),
             on_connect_fail_callback: Box::new(|| {}),
-            cancel_token: None,
+            // cancel_token will be a no-op if not set by the user
+            cancel_token: CancellationToken::new(),
         }
     }
 
@@ -101,7 +102,7 @@ impl ReconnectOptions {
     }
 
     pub fn with_cancel_token(mut self, token: CancellationToken) -> Self {
-        self.cancel_token = Some(token);
+        self.cancel_token = token;
         self
     }
 }
