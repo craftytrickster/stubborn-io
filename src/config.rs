@@ -101,6 +101,7 @@ impl ReconnectOptions {
         self
     }
 
+    #[must_use]
     pub fn with_cancel_token(mut self, token: CancellationToken) -> Self {
         self.cancel_token = token;
         self
