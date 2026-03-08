@@ -6,8 +6,6 @@
 //! If you need to create your own, you simply need to implement the [`UnderlyingIo`](crate::tokio::UnderlyingIo) trait.
 //! Once implemented, you can construct it easily by creating a [`StubbornIo`](crate::tokio::StubbornIo) type as seen below.
 //!
-//! *This crate requires at least version 1.39 of the Rust compiler.*
-//!
 //! ### Motivations
 //! This crate was created because I was working on a service that needed to fetch data from a remote server
 //! via a tokio `TcpConnection`. It normally worked perfectly (as does all of my code ☺), but every time the
