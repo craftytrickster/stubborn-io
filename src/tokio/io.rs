@@ -198,7 +198,9 @@ where
                 match result {
                     Ok(tcp) => tcp,
                     Err(e) => {
-                        error!("No more re-connect retries remaining. Never able to establish initial connection.");
+                        error!(
+                            "No more re-connect retries remaining. Never able to establish initial connection."
+                        );
                         return Err(e);
                     }
                 }

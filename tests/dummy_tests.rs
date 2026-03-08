@@ -1,6 +1,6 @@
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 use stubborn_io::ReconnectOptions;
 use tokio::io::{AsyncRead, AsyncWrite};
