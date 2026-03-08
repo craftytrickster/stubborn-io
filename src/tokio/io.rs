@@ -171,7 +171,13 @@ where
                         reconnect_num, duration
                     );
 
-                    sleep(duration).await;
+                    tokio::select! {
+                        _ = options.cancel_token.cancelled() => {
+                            info!("Reconnect cancelled via cancel token.");
+                            return Err(io::Error::new(ErrorKind::Interrupted, "Reconnect cancelled via cancel token."));
+                        }
+                        _ = sleep(duration) => {}
+                    }
 
                     info!("Attempting reconnect #{} now.", reconnect_num);
 
@@ -224,6 +230,7 @@ where
         }
 
         let ctor_arg = self.ctor_arg.clone();
+        let cancel_token = self.options.cancel_token.clone();
 
         // this is ensured to be true now
         if let Status::Disconnected(reconnect_status) = &mut self.status {
@@ -243,7 +250,14 @@ where
             let cur_num = reconnect_status.attempts_tracker.attempt_num;
 
             let reconnect_attempt = async move {
-                future_instant.await;
+                tokio::select! {
+                    _ = cancel_token.cancelled() => {
+                        info!("Reconnect cancelled via cancel token.");
+                        return Err(io::Error::new(ErrorKind::Interrupted, "Reconnect cancelled via cancel token."));
+                    }
+                    _ = future_instant => {}
+                }
+
                 info!("Attempting reconnect #{} now.", cur_num);
                 T::establish(ctor_arg).await
             };
@@ -280,8 +294,14 @@ where
                 self.underlying_io = underlying_io;
             }
             Poll::Ready(Err(err)) => {
-                error!("Connection attempt #{} failed: {:?}", attempt_num, err);
-                self.on_disconnect(cx);
+                if self.options.cancel_token.is_cancelled() {
+                    info!("Reconnection cancelled");
+                    self.status = Status::FailedAndExhausted;
+                    cx.waker().wake_by_ref();
+                } else {
+                    error!("Connection attempt #{} failed: {:?}", attempt_num, err);
+                    self.on_disconnect(cx);
+                }
             }
             Poll::Pending => {}
         }
